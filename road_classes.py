@@ -2,6 +2,7 @@ import math
 
 lane_width = 3.7
 
+count = 0
 
 class Junction():
     def __init__(self,label):
@@ -22,15 +23,17 @@ class Junction():
         self.x = None
         self.y = None
 
-        #NOTE: Included to test structure construction using print_contents in map_builder.py
+        #NOTE: Included to test structure construction using print_contents in
+        #      map_builder.py
         self.label_TEMP = label
 
     def update_coords(self,x,y,road=None):
-        self.x = x
-        self.y = y
-        for lane in self.out_lanes:
-            if lane.road is not road:    
-                lane.road.update_coords(self.x,self.y,self,lane)
+        if self.x != x or self.y != y:
+            self.x = x
+            self.y = y
+            for lane in self.out_lanes:
+                if lane.road is not road:    
+                    lane.road.update_coords(self.x,self.y,self,lane)
 
 
 class Road():
@@ -60,33 +63,37 @@ class Road():
     def update_coords(self,x,y,junction,lane):
         x_val, y_val = 0,0 
         next_junc = None
-        if junction is lane.to_junction: next_junc = lane.from_junction
-        else: next_junc = lane.to_junction
+        direction = lane.direction
         
-        if lane.direction in range(226,315):
+        if junction is lane.to_junction: next_junc = lane.from_junction
+        else: next_junc = lane.to_junction        
+
+        if direction in range(226,315):
             x_val = x
             y_val = y + junction.height
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
                 self.y = y_val
                 next_junc.update_coords(self.x+self.length*math.cos(math.radians(\
-                                    lane.direction)),self.y+self.length*math.sin(\
-                                    math.radians(lane.direction)),self)
-        elif lane.direction in range(135,226):
-            x_val = x+self.length*math.cos(math.radians(lane.direction))
-            y_val = y
+                                    direction)),self.y-self.length*math.sin(\
+                                    math.radians(direction)),self)
+        
+        elif direction in range(135,226):
+            x_val = x + self.length*math.cos(math.radians(direction))
+            y_val = y - self.length*math.sin(math.radians(direction))
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
                 self.y = y_val
                 next_junc.update_coords(self.x-next_junc.width,self.y,self)
-        elif lane.direction in range(46,135):
-            x_val = x
-            y_val = y - self.length*math.sin(math.radians(lane.direction))
+        
+        elif direction in range(46,135):
+            x_val = x + self.length*math.cos(math.radians(direction))
+            y_val = y - self.length*math.sin(math.radians(direction))
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
                 self.y = y_val
-                next_junc.update_coords(self.x,self.y- next_junc.heightself.length*\
-                                        math.sin(math.radians(lane.direction)),self)
+                next_junc.update_coords(self.x,self.y-next_junc.height,self)
+        
         else:
             x_val = x + junction.width
             y_val = y
@@ -95,7 +102,7 @@ class Road():
                 self.x = x_val
                 self.y = y_val
                 next_junc.update_coords(self.x+self.length*math.cos(math.radians(\
-                                        lane.direction)),self.y,self)
+                                        direction)),self.y,self)
  
         self.top_up_lane.update_coords()
         self.bottom_down_lane.update_coords()

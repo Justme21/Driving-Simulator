@@ -26,25 +26,26 @@ def set_junc_road_junc(from_junc,road,to_junc):
     set_road_to_junc(road,to_junc,1)
 
 
-def print_contents(junction,mod,last_lane=-1):
+def print_contents(junction,mod,prev_lanes=[]):
     """Program written to test the symbolic architecture of the map. Given a starting
        junction this traverses the map going form junction to connected road to
        junction. The program performs a depth-first search and will ultimately traverse
-       every possible road from each junction, in order of occurrence. 
-       There is no loop protection here currently. So if loops exist in the map the 
-       program will recurse endlessly."""
+       every possible road from each junction, in order of occurrence. """
+
     print("{}J{}\tIN: {}\tOUT: {}\tWIDTH: {}\tHEIGHT: {}\t({},{})".format(mod,junction.\
            label_TEMP,[entry.label_TEMP for entry in junction.in_lanes],\
            [entry.label_TEMP for entry in junction.out_lanes],\
            round(junction.width,2),round(junction.height,2),\
            round(junction.x,2),round(junction.y,2)))
 
-    for entry in [x for x in junction.out_lanes if x.label_TEMP!= last_lane]:
-        print("{}R{}\tLEN: {}\tDIREC: {}\tFROM: {}\t TO: {}\t({},{})\n".format(mod,\
-              entry.label_TEMP,round(entry.length,2),entry.direction,\
-              entry.from_junction.label_TEMP, entry.to_junction.label_TEMP,\
-              round(entry.x,2),round(entry.y,2)))
-        print_contents(entry.to_junction,mod+"\t",entry.label_TEMP)
+    for entry in junction.out_lanes:
+        if entry.label_TEMP not in prev_lanes:
+            print("{}R{}\tLEN: {}\tDIREC: {}\tFROM: {}\t TO: {}\t({},{})\n".format(mod,\
+                  entry.label_TEMP,round(entry.length,2),entry.direction,\
+                  entry.from_junction.label_TEMP, entry.to_junction.label_TEMP,\
+                  round(entry.x,2),round(entry.y,2)))
+            prev_lanes.append(entry.label_TEMP)
+            print_contents(entry.to_junction,mod+"\t",prev_lanes)
 
 
 def dimension_solver(dim,angle,cur_dim):
@@ -96,6 +97,20 @@ def construct_physical_overlay(junctions):
     set_anchor_posit(anchor_junc,axis_locat_on_screen)
     
 
+#junctions = [road_classes.Junction(i) for i in range(6)]
+
+#road_angles = [90,90,180,180,180,90,90]
+#road_lengths = [1,1,1,1,1,1,1]
+#roads = [road_classes.Road(road_lengths[i],road_angles[i],i) for i in range(7)]
+
+#set_junc_road_junc(junctions[0],roads[0],junctions[1])
+#set_junc_road_junc(junctions[1],roads[1],junctions[2])
+#set_junc_road_junc(junctions[3],roads[2],junctions[2])
+#set_junc_road_junc(junctions[4],roads[3],junctions[1])
+#set_junc_road_junc(junctions[5],roads[4],junctions[0])
+#set_junc_road_junc(junctions[4],roads[5],junctions[3])
+#set_junc_road_junc(junctions[5],roads[6],junctions[4])
+
 junctions = [road_classes.Junction(i) for i in range(4)]
 
 road_angles = [180,0,50]
@@ -106,8 +121,9 @@ set_junc_road_junc(junctions[0],roads[0],junctions[3])
 set_junc_road_junc(junctions[3],roads[1],junctions[1])
 set_junc_road_junc(junctions[2],roads[2],junctions[3])
 
-for junction in junctions:
-    set_dimensions(junction)
+#for junction in junctions:
+#    set_dimensions(junction)
+
 
 construct_physical_overlay(junctions)
 
