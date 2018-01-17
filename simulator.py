@@ -13,6 +13,6 @@ cars,junctions,roads = map_builder.build_map(num_junctions,num_roads,num_cars,ro
                                              road_lengths,junc_pairs)
 
 map_builder.print_contents(junctions[0])
-print("\n")
+print("\n\n")
 for entry in cars:
     entry.print_status()
