@@ -6,8 +6,6 @@ import random
 car_length = 4.17 
 car_width = 1.7
 
-random.seed(270394)
-
 class Car():
     def __init__(self,lane,label,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
@@ -31,14 +29,20 @@ class Car():
         #The processing speed of the car (how often it changes it's action)
         self.timestep = timestep
         
+        #Sense Variables
+        self.on_road = True #Check if car still on road
+
         #Initialise the position, velocity and heading features
         self.init_setup(lane)
-
+        
         self.label = "C{}".format(label)
+
 
     def init_setup(self,lane):
         self.on = lane
         lane.on = self
+
+        self.on_road = True
 
         self.heading = lane.direction
 
@@ -46,15 +50,25 @@ class Car():
         y_disp = (self.length/2)+ random.random()*(lane.length-self.length)
         phi = math.sqrt(x_disp**2 + y_disp**2)
         delta = math.degrees(math.atan(x_disp/y_disp))
+
+        mod_x,mod_y = 1,1
+
         #Lane is up/down
         if (lane.direction in range(46,135)) or (lane.direction in range(226,315)):
+            if lane.direction in range(46,135): mod_x *= -1
+            else: mod_y *= -1
             omega = lane.direction+delta
         #Lane is left/right
         else:
+            if lane.direction in range(135,226): mod_x *= -1
+            else: mod_y *= -1
             omega = lane.direction-delta
 
-        self.y_com = lane.y+phi*math.sin(math.radians(omega))
-        self.x_com = lane.x+phi*math.cos(math.radians(omega))
+        if lane.direction in range(46,135): mod_x = -1; mod_y = 1
+        
+
+        self.y_com = lane.y+mod_y*phi*math.sin(math.radians(omega))
+        self.x_com = lane.x+mod_x*phi*math.cos(math.radians(omega))
         
         #NOTE: In the future this should be changed so that intial speed is something
         #      reasonable and not just arbitrarily selected.
@@ -67,10 +81,18 @@ class Car():
         head_dot = turn_angle
         v_dot = accel
         
-        self.y += self.timestep*y_dot
-        self.x += self.timestep*x_dot
+        self.y_com += self.timestep*y_dot
+        self.x_com += self.timestep*x_dot
         self.v += self.timestep*v_dot
         self.heading += self.timestep*head_dot
+
+
+    #def checkPositState(self):
+        #if self.
+
+
+    def sense(self):
+        self.checkPositState()
 
 
     def print_status(self,mod=""):

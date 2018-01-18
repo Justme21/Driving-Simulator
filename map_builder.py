@@ -1,9 +1,7 @@
 import math
 import random
 import road_classes
-import vehicle_classes
 
-random.seed(49307)
 
 def set_road_to_junc(road,junc,entering):
     """Performs the appropriate pairing of a road object with a junction it leads into.
@@ -109,26 +107,12 @@ def construct_physical_overlay(junctions):
     set_anchor_posit(anchor_junc,anchor_point)
     
 
-def build_map(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                 car_lanes=None):
-    #junctions = [road_classes.Junction(i) for i in range(6)]
-
-    #road_angles = [90,90,180,180,180,90,90]
-    #road_lengths = [1,1,1,1,1,1,1]
-    #roads = [road_classes.Road(road_lengths[i],road_angles[i],i) for i in range(7)]
-
-    #set_junc_road_junc(junctions[0],roads[0],junctions[1])
-    #set_junc_road_junc(junctions[1],roads[1],junctions[2])
-    #set_junc_road_junc(junctions[3],roads[2],junctions[2])
-    #set_junc_road_junc(junctions[4],roads[3],junctions[1])
-    #set_junc_road_junc(junctions[5],roads[4],junctions[0])
-    #set_junc_road_junc(junctions[4],roads[5],junctions[3])
-    #set_junc_road_junc(junctions[5],roads[6],junctions[4])
-
-
+def build_map(num_junctions,num_roads,road_angles,road_lens,junc_pairs):
+    """Runs the map builder. Constructs the junctions and roads and initiates the
+       process of linking them together."""
     junctions = [road_classes.Junction(i) for i in range(num_junctions)]
 
-    roads = [road_classes.Road(road_lengths[i],road_angles[i],i) for i in range(num_roads)]
+    roads = [road_classes.Road(road_lens[i],road_angles[i],i) for i in range(num_roads)]
 
     for i in range(num_roads):
         set_junc_road_junc(junctions[junc_pairs[i][0]],roads[i],\
@@ -136,19 +120,4 @@ def build_map(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pai
 
     construct_physical_overlay(junctions)
 
-    cars = []
-    lane = None
-
-    if car_lanes is None:
-        car_lanes = []
-        for _ in range(num_cars):
-            car_lanes.append((random.randint(0,num_roads-1),random.randint(0,1)))
-
-    for i,entry in enumerate(car_lanes):
-        if entry[1]:
-            lane = roads[entry[0]].top_up_lane        
-        else:
-            lane = roads[entry[0]].bottom_down_lane
-        cars.append(vehicle_classes.Car(lane,i))
-   
-    return cars,junctions,roads 
+    return junctions,roads 

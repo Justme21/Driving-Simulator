@@ -120,8 +120,8 @@ class Road():
 
         #Road is under the last junction
         if direction in range(226,315):
-            x_val = x
-            y_val = y + junction.height
+            x_val = round(x,2)
+            y_val = round(y + junction.height,2)
             #Only propogate update if the coordinates here needed updating.
             #Otherwise thi road was updated before. 
             if self.x != x_val or self.y != y_val:
@@ -133,8 +133,8 @@ class Road():
         
         #Road is to the left of the previous junction
         elif direction in range(135,226):
-            x_val = x + self.length*math.cos(math.radians(direction))
-            y_val = y - self.length*math.sin(math.radians(direction))
+            x_val = round(x + self.length*math.cos(math.radians(direction)),2)
+            y_val = round(y - self.length*math.sin(math.radians(direction)),2)
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
                 self.y = y_val
@@ -142,8 +142,8 @@ class Road():
        
         #Road is above previous junction 
         elif direction in range(46,135):
-            x_val = x + self.length*math.cos(math.radians(direction))
-            y_val = y - self.length*math.sin(math.radians(direction))
+            x_val = round(x + self.length*math.cos(math.radians(direction)),2)
+            y_val = round(y - self.length*math.sin(math.radians(direction)),2)
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
                 self.y = y_val
@@ -151,8 +151,8 @@ class Road():
         
         #Road is to the right of previous junction (by process of elimination)
         else:
-            x_val = x + junction.width
-            y_val = y
+            x_val = round(x + junction.width,2)
+            y_val = round(y,2)
             
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
