@@ -26,11 +26,12 @@ class Junction():
         self.width = 2*lane_width
         self.height = 2*lane_width
 
-        #NOTE: This is where I stopped on Saturday 13th Jan.
-        # Next step is to include into map builder the ability to resize the junction
-        # from default when incoming our outgoing lane is at an angle to the junction
+        #These coordinates get specified in updateCoords
         self.x = None
         self.y = None
+
+        #This is mainly for ease of determining if a car has left whatever it is on
+        self.direction = 90
 
         #on is a list of all objects currently on the junction
         # Might be useful
@@ -41,7 +42,7 @@ class Junction():
         self.label = "J{}".format(label)
 
 
-    def update_coords(self,x,y,road=None):
+    def updateCoords(self,x,y,road=None):
         """Updates (x,y), the location of the top left corner of the junction to be the 
            parameters x,y respectively. In map_builder it is an update to a junction that
            begins the process of anchoring the graph
@@ -58,10 +59,10 @@ class Junction():
             for lane in self.out_lanes:
                 #Don't propogate update wave to road that we know just updated
                 if lane.road is not road:    
-                    lane.road.update_coords(self.x,self.y,self,lane)
+                    lane.road.updateCoords(self.x,self.y,self,lane)
 
 
-    def print_status(self,mod=""):
+    def printStatus(self,mod=""):
         print("{}{}\tIN: {}\tOUT: {}\tWIDTH: {}\tHEIGHT: {}\t({},{})".format(mod,\
                self.label,[entry.label for entry in self.in_lanes],\
                [entry.label for entry in self.out_lanes],\
@@ -81,7 +82,7 @@ class Road():
 
         #We twin the lanes so that we can easily get from the top lane to the bottom
         # in program without having to go through the road.
-        self.top_up_lane.twin_lanes(self.bottom_down_lane)
+        self.top_up_lane.twinLanes(self.bottom_down_lane)
 
         #The coordinates of the top_left corner of the road obect. Also the top left
         # corner of the top_up_lane. These values are set in 
@@ -89,13 +90,16 @@ class Road():
         self.x = None
         self.y = None
 
+        #The direction of the road is the angle of the top_up_lane (i.e.right and up)
+        self.direction = angle
+
         #Length of the road.
         #NOTE: In the long run these values might not be needed for the road class.
         #      for the time being they remain until further testing can be done
         self.length = length
         self.width = 2*lane_width
         
-        #on is a list of all objects currently on the junction
+        #on is a list of all objects currently on the road
         # Might be useful
         self.on = []
 
@@ -103,13 +107,13 @@ class Road():
         self.label = "R{}".format(label)
 
 
-    def update_coords(self,x,y,junction,lane):
+    def updateCoords(self,x,y,junction,lane):
         """Integral update function as it does most of the heavy lifting for updates.
            Given the coordinates of the previous junction determines where the top left
            for the road should be. This depends on the direction the road is going and
            whether it is going into or coming out of a junction.
            For convenience it also computes the coordinates for the alternate junction
-           and passes those values to the corresponding update_coords function."""
+           and passes those values to the corresponding updateCoords function."""
         x_val, y_val = 0,0 
         next_junc = None
         direction = lane.direction
@@ -127,7 +131,7 @@ class Road():
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
                 self.y = y_val
-                next_junc.update_coords(self.x+self.length*math.cos(math.radians(\
+                next_junc.updateCoords(self.x+self.length*math.cos(math.radians(\
                                     direction)),self.y-self.length*math.sin(\
                                     math.radians(direction)),self)
         
@@ -138,7 +142,7 @@ class Road():
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
                 self.y = y_val
-                next_junc.update_coords(self.x-next_junc.width,self.y,self)
+                next_junc.updateCoords(self.x-next_junc.width,self.y,self)
        
         #Road is above previous junction 
         elif direction in range(46,135):
@@ -147,7 +151,7 @@ class Road():
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
                 self.y = y_val
-                next_junc.update_coords(self.x,self.y-next_junc.height,self)
+                next_junc.updateCoords(self.x,self.y-next_junc.height,self)
         
         #Road is to the right of previous junction (by process of elimination)
         else:
@@ -157,15 +161,15 @@ class Road():
             if self.x != x_val or self.y != y_val:
                 self.x = x_val
                 self.y = y_val
-                next_junc.update_coords(self.x+self.length*math.cos(math.radians(\
+                next_junc.updateCoords(self.x+self.length*math.cos(math.radians(\
                                         direction)),self.y,self)
 
         #It does not matter when the lane's coordinates get updated, so leave to end 
-        self.top_up_lane.update_coords()
-        self.bottom_down_lane.update_coords()
+        self.top_up_lane.updateCoords()
+        self.bottom_down_lane.updateCoords()
 
 
-    def print_status(self,mod=""):
+    def printStatus(self,mod=""):
         print("{}{}\tLEN: {}\tLANES: ({},{})\t({},{})\n".format(mod,\
                   self.label,round(self.length,2), self.top_up_lane.label,\
                   self.bottom_down_lane.label,round(self.x,2),round(self.y,2)))        
@@ -195,7 +199,7 @@ class Lane():
         #The road that this is a lane on
         self.road = road
         
-        #Determines if the lane is going left/up, used in update_coords
+        #Determines if the lane is going left/up, used in updateCoords
         self.is_top_up = is_top_up
 
 
@@ -207,7 +211,7 @@ class Lane():
         self.label = "L{}".format(label)
 
 
-    def twin_lanes(self,lane):
+    def twinLanes(self,lane):
         """The parameter 'lane' is a reference to the other lane on the same 
            road as the ego-lane. This function provides each with a reference to the
            other for convenience in-program"""
@@ -216,7 +220,7 @@ class Lane():
             lane.lane_twin = self
 
 
-    def update_coords(self):
+    def updateCoords(self):
         """Update the coordinates of the lane. If the road is top lane (left to right)
            or the lane going up (if road is up/down) then the coordinates are just that
            of the road. Otherwise you must adjust it slightly to account for the width
@@ -233,7 +237,7 @@ class Lane():
                 self.x+=self.lane_twin.width
 
 
-    def print_status(self,mod=""):
+    def printStatus(self,mod=""):
         print("{}{}\tLEN: {}\tDIREC: {}\tFROM: {}\t TO: {}\t({},{})\n".format(mod,\
                   self.label,round(self.length,2),self.direction,\
                   self.from_junction.label, self.to_junction.label,\

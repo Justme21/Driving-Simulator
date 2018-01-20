@@ -6,7 +6,7 @@ import vehicle_classes
 random.seed(493072)
 
 
-def put_cars_on_map(roads,num_cars,car_lanes=None):
+def putCarsOnMap(roads,num_cars,car_lanes=None):
     """Constructs the car objects and assigns them coordinates that puts them on either
        specified lanes or else randomly chooses lanes to put them on."""
     cars = []
@@ -25,15 +25,10 @@ def put_cars_on_map(roads,num_cars,car_lanes=None):
     # will give itself a random location on the specified lane with the same heading as
     # the lane.
     for i,entry in enumerate(car_lanes):
-        if entry[1]:
-            lane = roads[entry[0]].top_up_lane
-        else:
-            lane = roads[entry[0]].bottom_down_lane
-        cars.append(vehicle_classes.Car(lane,i))
-
+        cars.append(vehicle_classes.Car(roads[car_lanes[i][0]],car_lanes[i][1],i))
     return cars
 
-
+#Figure of eight
 #num_junctions = 6
 #num_roads = 7
 #num_cars = 1
@@ -43,6 +38,8 @@ def put_cars_on_map(roads,num_cars,car_lanes=None):
 
 #junc_pairs = [(0,1),(1,2),(3,2),(4,1),(5,0),(4,3),(5,4)]
 
+
+#3-road intersection
 num_junctions = 4
 num_roads = 3
 num_cars = 1
@@ -52,17 +49,17 @@ road_lengths = [30,30,30]
 
 junc_pairs = [(0,3),(3,1),(2,3)]
 
-junctions,roads = map_builder.build_map(num_junctions,num_roads,road_angles,road_lengths,\
+junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,road_lengths,\
                                         junc_pairs)
 
-cars = put_cars_on_map(roads,num_cars)
+cars = putCarsOnMap(roads,num_cars)
 
 
-map_builder.print_contents(junctions[0])
+map_builder.printContents(junctions[0])
 print("\n")
 while(True):
     for entry in cars:
         entry.move(0,0)
-        entry.print_status()
+        entry.printStatus()
         print("\n")
-    time.sleep(.11)
+    time.sleep(.1)
