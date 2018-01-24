@@ -24,13 +24,18 @@ class Junction():
         # We use generic values on initialisation so that the junction will have
         # some dimension even if no lanes enter on that side
         self.width = 2*lane_width
-        self.height = 2*lane_width
+        self.length = 2*lane_width
 
         #These coordinates get specified in updateCoords
         self.x = None
         self.y = None
 
+        #The location of the four corners of the junction
+        self.four_corners = {"front_left":None,"front_right":None,"back_left":None,\
+                             "back_right":None}
+        
         #This is mainly for ease of determining if a car has left whatever it is on
+        #NOTE: If the value of self.direction is ever changed from 90 revise updteCoords
         self.direction = 90
 
         #on is a list of all objects currently on the junction
@@ -42,7 +47,7 @@ class Junction():
         self.label = "J{}".format(label)
 
 
-    def updateCoords(self,x,y,road=None):
+    def updateCoords(self,corner,coord,in_road=None):
         """Updates (x,y), the location of the top left corner of the junction to be the 
            parameters x,y respectively. In map_builder it is an update to a junction that
            begins the process of anchoring the graph
@@ -52,22 +57,60 @@ class Junction():
         #Once the wave of updates reaches a junction that is already in the correct
         # position it stops.This is, arguably, sloppy craftsmanship, but it works.
         # C'est la vie 
-        if self.x != x or self.y != y:
+        cur_coords = self.four_corners[corner]
+  
+        if cur_coords is None or round(cur_coords[0],2) != round(coord[0],2) or \
+           round(cur_coords[1],2) != round(coord[1],2):
             # The inputs are the intended locations for the junction's top left corner
-            self.x = x
-            self.y = y
+            #This is put in just in case the four_corners get specified before update
+            # is complete
+            for x in self.four_corners: self.four_corners[x] = None
+            self.four_corners[corner] = list(coord)
+            setFourCorners(self)
             for lane in self.out_lanes:
+                road = lane.road
                 #Don't propogate update wave to road that we know just updated
-                if lane.road is not road:    
-                    lane.road.updateCoords(self.x,self.y,self,lane)
+                #This reasoning ONLY WORKS if self.direction=90
+                if road is not in_road:
+                    if lane.direction in range(0,46):
+                        road.updateCoords("back_right",self.four_corners["front_left"],\
+                                           self,lane)
+                    elif lane.direction in range(46,90):
+                        road.updateCoords("back_left",self.four_corners["front_left"]\
+                                          ,self,lane)
+                    elif lane.direction in range(90,135):
+                        road.updateCoords("back_right",self.four_corners["front_right"]\
+                                          ,self,lane)
+                    elif lane.direction in range(135,180):
+                        road.updateCoords("back_left",self.four_corners["front_right"]\
+                                          ,self,lane)
+                    elif lane.direction in range(180,226):
+                        road.updateCoords("back_right",self.four_corners["back_right"]\
+                                          ,self,lane)
+                    elif lane.direction in range(226,270):
+                        road.updateCoords("back_left",self.four_corners["back_right"]\
+                                          ,self,lane)
+                    elif lane.direction in range(270,315):
+                        road.updateCoords("back_right",self.four_corners["back_left"]\
+                                          ,self,lane)
+                    else:
+                        road.updateCoords("back_left",self.four_corners["back_left"]\
+                                          ,self,lane)
+
+
+    def putOnObject(self,obj):
+        self.on.append(obj)
 
 
     def printStatus(self,mod=""):
-        print("{}{}\tIN: {}\tOUT: {}\tWIDTH: {}\tHEIGHT: {}\t({},{})".format(mod,\
+        dims = ""
+        for x in self.four_corners:
+            dims += "({},{})\t".format(self.four_corners[x][0],self.four_corners[x][1])
+        print("{}{}\tIN: {}\tOUT: {}\tWIDTH: {}\tHEIGHT: {}".format(mod,\
                self.label,[entry.label for entry in self.in_lanes],\
                [entry.label for entry in self.out_lanes],\
-               round(self.width,2),round(self.height,2),\
-               round(self.x,2),round(self.y,2)))
+               round(self.width,2),round(self.length,2)))
+        print("{}{}\t{}".format(mod,self.label,dims))
 
 
 class Road():
@@ -82,6 +125,8 @@ class Road():
 
         #We twin the lanes so that we can easily get from the top lane to the bottom
         # in program without having to go through the road.
+        #The lane calling twinLanes must be the top lane (going left) or the lane
+        # going up
         self.top_up_lane.twinLanes(self.bottom_down_lane)
 
         #The coordinates of the top_left corner of the road obect. Also the top left
@@ -89,6 +134,10 @@ class Road():
         # map_builder.construct_physical_overlay
         self.x = None
         self.y = None
+
+        #The location of the four corners of the junction
+        self.four_corners = {"front_left":None,"front_right":None,"back_left":None,\
+                             "back_right":None}
 
         #The direction of the road is the angle of the top_up_lane (i.e.right and up)
         self.direction = angle
@@ -107,7 +156,7 @@ class Road():
         self.label = "R{}".format(label)
 
 
-    def updateCoords(self,x,y,junction,lane):
+    def updateCoords(self,corner,coords,junction,lane):
         """Integral update function as it does most of the heavy lifting for updates.
            Given the coordinates of the previous junction determines where the top left
            for the road should be. This depends on the direction the road is going and
@@ -116,13 +165,48 @@ class Road():
            and passes those values to the corresponding updateCoords function."""
         x_val, y_val = 0,0 
         next_junc = None
+        next_is_to = True
         direction = lane.direction
         
         #Used to identify which junction to send update wave to next
-        if junction is lane.to_junction: next_junc = lane.from_junction
+        if junction is lane.to_junction: 
+            next_junc = lane.from_junction
+            next_is_to = False
         else: next_junc = lane.to_junction        
 
-        #Road is under the last junction
+        cur_coord = self.four_corners[corner]
+        if cur_coord is None or (round(cur_coord[0],2) != round(coords[0],2)) or\
+           (round(cur_coord[1],2) != round(coords[1],2)):
+            self.four_corners[corner] = list(coords)
+            setFourCorners(self)
+            
+            if direction in range(0,46):
+                if next_is_to: tag = ["back_right","front_left"]
+                else: tag = ["front_left","back_right"]
+            elif lane.direction in range(46,90):
+                if next_is_to: tag = ["front_left","back_right"]
+                else: tag = ["back_right","back_left"]
+            elif lane.direction in range(90,135):
+                if next_is_to: tag = ["front_right","front_left"]
+                else: tag = ["back_left","back_right"]
+            elif lane.direction in range(135,180):
+                if next_is_to: tag = ["back_left","front_right"]
+                else: tag = ["front_right","back_left"]
+            elif lane.direction in range(180,226):
+                if next_is_to: tag = ["front_left","front_left"]
+                else: tag = ["back_right","back_right"]
+            elif lane.direction in range(226,270):
+                if next_is_to: tag = ["back_right","front_right"]
+                else: tag = ["front_left","back_left"]
+            elif lane.direction in range(270,315):
+                if next_is_to: tag = ["back_left","front_left"]
+                else: tag = ["front_right","back_right"]
+            else:
+                if next_is_to: tag = ["front_right","front_right"]
+                else: tag = ["back_left","back_left"]
+            next_junc.updateCoords(tag[0],self.four_corners[tag[1]],self)
+
+        """#Road is under the last junction
         if direction in range(226,315):
             x_val = round(x,2)
             y_val = round(y + junction.height,2)
@@ -163,16 +247,25 @@ class Road():
                 self.y = y_val
                 next_junc.updateCoords(self.x+self.length*math.cos(math.radians(\
                                         direction)),self.y,self)
-
+        """
         #It does not matter when the lane's coordinates get updated, so leave to end 
         self.top_up_lane.updateCoords()
         self.bottom_down_lane.updateCoords()
 
 
+    def putOnObject(self,obj):
+        """Adds a reference to an object to the list of objects 'on' the road"""
+        self.on.append(obj)
+
+
     def printStatus(self,mod=""):
-        print("{}{}\tLEN: {}\tLANES: ({},{})\t({},{})\n".format(mod,\
+        dims = ""
+        for x in self.four_corners:
+            dims += "({},{})\t".format(self.four_corners[x][0],self.four_corners[x][1])
+        print("{}{}\tLEN: {}\tLANES: ({},{})".format(mod,\
                   self.label,round(self.length,2), self.top_up_lane.label,\
-                  self.bottom_down_lane.label,round(self.x,2),round(self.y,2)))        
+                  self.bottom_down_lane.label))
+        print("{}{}\t{}\n".format(mod,self.label,dims))
 
 
 class Lane():
@@ -193,6 +286,9 @@ class Lane():
         self.x = None
         self.y = None
 
+        self.four_corners = {"front_left":None,"front_right":None,"back_left":None,\
+                             "back_right":None}
+        
         #A reference to the other lane on this lane's road
         self.lane_twin = None
 
@@ -220,12 +316,24 @@ class Lane():
             lane.lane_twin = self
 
 
+    def putOnObject(self,obj):
+        self.on.append(obj)
+        self.road.putOnObject(obj)
+
+
     def updateCoords(self):
         """Update the coordinates of the lane. If the road is top lane (left to right)
            or the lane going up (if road is up/down) then the coordinates are just that
            of the road. Otherwise you must adjust it slightly to account for the width
            of the twinned road."""
-        self.x = self.road.x
+        if self.is_top_up:
+            self.four_corners["front_left"] = list(self.road.four_corners["front_left"])
+        else:
+            self.four_corners["front_right"] = list(self.road.four_corners["front_right"])
+
+        setFourCorners(self)
+
+        """self.x = self.road.x
         self.y = self.road.y
         if not self.is_top_up:
             if (self.direction<=45 or self.direction>=315) or\
@@ -235,10 +343,42 @@ class Lane():
                 self.y+=self.lane_twin.width
             else:
                 self.x+=self.lane_twin.width
-
+        """
 
     def printStatus(self,mod=""):
-        print("{}{}\tLEN: {}\tDIREC: {}\tFROM: {}\t TO: {}\t({},{})\n".format(mod,\
+        dims = ""
+        for x in self.four_corners:
+            dims += "({},{})\t".format(self.four_corners[x][0],self.four_corners[x][1])
+        print("{}{}\tLEN: {}\tDIREC: {}\tFROM: {}\t TO: {}".format(mod,\
                   self.label,round(self.length,2),self.direction,\
-                  self.from_junction.label, self.to_junction.label,\
-                  round(self.x,2),round(self.y,2))) 
+                  self.from_junction.label, self.to_junction.label)) 
+        print("{}{}\t{}\n".format(mod,self.label,dims))
+
+
+def setFourCorners(obj):
+    #There should only be one entry in this list
+    start = [x for x in obj.four_corners if obj.four_corners[x] is not None][0]
+    order = {"back_right":"front_right","front_right":"front_left",\
+             "front_left":"back_left","back_left":"back_right"}
+    end = str(start)
+    pt_init = None
+    direc,disp = None,None
+    while start is not end or direc is None:
+        if start is "back_right":
+            direc = math.radians(obj.direction)
+            disp = obj.length
+        elif start is "front_right":
+            direc = math.radians(obj.direction+90)
+            disp = obj.width
+        elif start is "front_left":
+            direc = math.radians(obj.direction+180)
+            disp = obj.length
+        elif start is "back_left":
+            direc = math.radians(obj.direction+270)
+            disp = obj.length
+
+        pt_init = obj.four_corners[start]
+        print("PT: {}\tORDER: {}".format(pt_init,order[start]))
+        obj.four_corners[order[start]] = [round(pt_init[0] + disp*math.cos(direc),2), \
+                                          round(pt_init[1] + disp*math.sin(direc),2)]
+        start = order[start]

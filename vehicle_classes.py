@@ -13,8 +13,10 @@ class Car():
         self.x_com = None
         self.y_com = None
 
-        self.four_corners = {"front_left":(),"front_right":(),"back_left":(),\
-                             "back_right":()}
+        #Dictionary storing the coordinates of the four corners of the 
+        #vehicle from the orientation of the car
+        self.four_corners = {"front_left":None,"front_right":None,"back_left":None,\
+                             "back_right":None}
   
         #Velocity of the car
         self.v = None
@@ -26,10 +28,10 @@ class Car():
         self.length = car_length
         self.width = car_width
 
-        #The object (lane or junction) that the car is on
+        #The object (road or junction) that the car is on
         #This is a list as the car might be straddling a lane and junction
         #Or two lanes
-        self.on = None
+        self.on = []
 
         #The processing speed of the car (how often it changes it's action)
         self.timestep = timestep
@@ -60,28 +62,33 @@ class Car():
         self.four_corners["back_left"] = (self.x_com-phi*math.cos(math.radians(\
                                            direction-delta)),self.y_com+phi*math.sin(\
                                            math.radians(direction-delta)))
-        self.four_corners["back_rightt"] = (self.x_com-phi*math.cos(math.radians(\
+        self.four_corners["back_right"] = (self.x_com-phi*math.cos(math.radians(\
                                            direction+delta)),self.y_com+phi*math.sin(\
                                            math.radians(direction+delta)))
+
+    def putOnObject(self,obj):
+        self.on.append(obj)
 
 
     def initSetup(self,road,is_top_lane):
         """Performing initial setup of the car. Input is reference to lane that the
            vehicle is generated on."""
-        self.on = road #Give the car a pointer to the lane it is on
-        road.on.append(self)       
+        lane = None
+        if is_top_lane:
+            self.putOnObject(road.top_up_lane)
+            road.top_up_lane.putOnObject(self)
+            lane = road.top_up_lane
+        else:
+            self.putOnObject(road.bottom_down_lane)
+            road.bottom_down_lane.putOnObject(self)
+            lane = road.bottom_down_lane
  
-        if is_top_lane: lane = road.top_up_lane
-        else: lane = road.bottom_down_lane
-
-        lane.on.append(self) #The lane has a list of objects on it
-
+        
         self.on_road = True #on_road is false if we run off the road
 
         #For simplicity we assume the car starts at the centre of the road, heading
         # parallel to the course of the road
         self.heading = lane.direction
-
 
         x_disp = lane.width/2
         #Randomly place the car somewhere along the length of the road
@@ -137,16 +144,21 @@ class Car():
             else: mod_y *= -1
             omega = direction-delta
 
-       return (mod_x*phi*math.cos(math.radians(omega)),mod_y*phi*math.sin(math.radians(\
+        return (mod_x*phi*math.cos(math.radians(omega)),mod_y*phi*math.sin(math.radians(\
                omega)))
 
 
-    def checkOnRoad(self):
-        on_direct = self.on.direction
-        if  
-        
+    #def checkOnRoad(self):
+        """Checks to make sure that the vehicle is still within the bounds of the 
+           road_classes object it is on. We have made a decision that if the 
+           vehicle is within the bounds of any object it is on (it might be
+           straddling two lanes or something"""
+    """    for obj in self.on:
+            on_direct = obj.direction
+            if self.outsideTheLines(obj,
+    """         
 
-    def checkForTransition(self):
+    #def checkForTransition(self):
          
 
     def checkPositState(self):
@@ -158,7 +170,6 @@ class Car():
         self.checkForTransition()
         self.checkForCrash()
         self.checkOnRoad()
-        self.checkForTransition()
 
 
     def sense(self):
@@ -190,5 +201,5 @@ def angularToCartesianDisplacement(x_disp,y_disp,direction):
         else: mod_y *= -1
         omega = direction-delta
 
-   return (mod_x*phi*math.cos(math.radians(omega)),mod_y*phi*math.sin(math.radians(\
+    return (mod_x*phi*math.cos(math.radians(omega)),mod_y*phi*math.sin(math.radians(\
            omega)))

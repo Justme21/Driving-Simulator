@@ -35,11 +35,11 @@ def printContents(junction,mod="",prev_lanes=[]):
        junction. The program performs a depth-first search and will ultimately traverse
        every possible road from each junction, in order of occurrence. """
 
-    junction.print_status(mod)
+    junction.printStatus(mod)
 
     for entry in junction.out_lanes:
         if entry.label not in prev_lanes:
-            entry.print_status(mod)
+            entry.printStatus(mod)
             prev_lanes.append(entry.label)
             printContents(entry.to_junction,mod+"\t",prev_lanes)
 
@@ -59,7 +59,7 @@ def setDimensions(junction):
        top/bottom and left/right entering and then determining the angle at which 
        each meets the edge of the junction"""
     width = junction.width
-    height = junction.height
+    height = junction.length
 
     for lane in junction.in_lanes:
         if (lane.direction<=45 or lane.direction>=315) or \
@@ -70,13 +70,15 @@ def setDimensions(junction):
             width = dimensionSolver(lane.width,lane.direction,width)
 
     junction.width = width
-    junction.height = height
+    junction.length = height
     
 
 def setAnchorPosit(junction,anchor_posit):
    """Given an arbitrary initial node (junction) and position for that node on 
-      the (x,y) plane, assigns the location for every road and junction on the graph."""
-   junction.updateCoords(anchor_posit[0],anchor_posit[1]) 
+      the (x,y) plane, assigns the location for every road and junction on the graph.
+      The first parameter passed to "updateCoords" is which corner of the node (by
+      the junction's orientation) you are setting"""
+   junction.updateCoords("front_left",anchor_posit) 
 
 
 def constructPhysicalOverlay(junctions):
@@ -93,11 +95,13 @@ def constructPhysicalOverlay(junctions):
     anchor_point = [0,0]
     setAnchorPosit(anchor_junc,anchor_point)
 
-    for junction in junctions:
-        if min_X is None or junction.x<min_X:
-            min_X = junction.x
-        if min_Y is None or junction.y<min_Y:
-            min_Y = junction.y
+    for junc in junctions:
+        min_corner_x = min([junc.four_corners[x][0] for x in junc.four_corners])
+        min_corner_y = min([junc.four_corners[x][1] for x in junc.four_corners]) 
+        if min_X is None or min_corner_x<min_X:
+            min_X = min_corner_x
+        if min_Y is None or min_corner_y<min_Y:
+            min_Y = min_corner_y
 
     #Tweaking of the values being subtracted here would allow you to put the 
     # graph where you like however, this might require knowing the dimension
@@ -105,6 +109,7 @@ def constructPhysicalOverlay(junctions):
     # the x values and one to update the y's
     anchor_point[0] -= min_X
     anchor_point[1] -= min_Y
+    print("BREAK HERE")
     setAnchorPosit(anchor_junc,anchor_point)
     
 
