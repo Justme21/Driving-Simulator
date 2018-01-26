@@ -97,9 +97,19 @@ class Junction():
                                           ,self)
 
 
-    def putOnObject(self,obj):
+    def putOn(self,obj):
         """Adds an object (obj) to the list of things currently on the junction"""
-        self.on.append(obj)
+        if obj not in self.on:
+            self.on.append(obj)
+        if self not in obj.on:
+            obj.putOn(self)
+
+
+    def takeOff(self,obj):
+        if obj in self.on:
+            self.on.remove(obj)
+        if self in obj.on:
+            obj.takeOff(self)
 
 
     def printStatus(self,mod=""):
@@ -201,9 +211,19 @@ class Road():
         self.bottom_down_lane.updateCoords("front_left",self.four_corners["back_right"])
 
 
-    def putOnObject(self,obj):
+    def putOn(self,obj):
         """Adds a reference to an object to the list of objects 'on' the road"""
-        self.on.append(obj)
+        if obj not in self.on:
+            self.on.append(obj)
+        if self not in obj.on:
+            obj.putOn(self)
+
+ 
+    def takeOff(self,obj):
+        if obj in self.on:
+            self.on.remove(obj)
+        if self in obj.on:
+            obj.takeOff(self)
 
 
     def printStatus(self,mod=""):
@@ -264,13 +284,20 @@ class Lane():
             lane.lane_twin = self
 
 
-    def putOnObject(self,obj):
+    def putOn(self,obj):
         """Add the specified object to the list of objects on the lane. 
            Also add it onto the road if it is not already there"""
-        self.on.append(obj)
+        if obj not in self.on:
+            self.on.append(obj)
         if obj not in self.road.on:
-            self.road.putOnObject(obj)
+            self.road.putOn(obj)
 
+
+    def takeOff(self,obj):
+        if obj in self.on:
+            self.on.remove(obj)
+        if self in obj.on:
+            obj.takeOff(self)
 
     def updateCoords(self,corner,coords):
         """Update the coordinates for the corners of the lane by calling

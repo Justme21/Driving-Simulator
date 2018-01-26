@@ -1,5 +1,6 @@
 import math
 import random
+import road_classes
 
 #Dimensions are those of a "Ford Focus 5-door 1.8i Zetec" as found at
 # http://www.metric.org.uk/motoring  . Units are metres
@@ -53,21 +54,32 @@ class Car():
         direction = self.heading
         phi = math.sqrt((self.length/2)**2 + (self.width/2)**2)
         delta = math.degrees(math.atan(self.width/self.length))
-        self.four_corners["front_left"] = (self.x_com+phi*math.cos(math.radians(\
+        self.four_corners["front_left"] = [self.x_com+phi*math.cos(math.radians(\
                                            direction+delta)),self.y_com-phi*math.sin(\
-                                           math.radians(direction+delta)))
-        self.four_corners["front_right"] = (self.x_com+phi*math.cos(math.radians(\
+                                           math.radians(direction+delta))]
+        self.four_corners["front_right"] = [self.x_com+phi*math.cos(math.radians(\
                                            direction-delta)),self.y_com-phi*math.sin(\
-                                           math.radians(direction-delta)))
-        self.four_corners["back_left"] = (self.x_com-phi*math.cos(math.radians(\
+                                           math.radians(direction-delta))]
+        self.four_corners["back_left"] = [self.x_com-phi*math.cos(math.radians(\
                                            direction-delta)),self.y_com+phi*math.sin(\
-                                           math.radians(direction-delta)))
-        self.four_corners["back_right"] = (self.x_com-phi*math.cos(math.radians(\
+                                           math.radians(direction-delta))]
+        self.four_corners["back_right"] = [self.x_com-phi*math.cos(math.radians(\
                                            direction+delta)),self.y_com+phi*math.sin(\
-                                           math.radians(direction+delta)))
+                                           math.radians(direction+delta))]
 
-    def putOnObject(self,obj):
-        self.on.append(obj)
+
+    def putOn(self,obj):
+        if obj not in self.on:
+            self.on.append(obj)
+        if self not in obj.on:
+            obj.putOn(self)
+
+
+    def takeOff(self,obj):
+        if obj in self.on:
+            self.on.remove(obj)
+        if self in obj.on:
+            obj.takeOff(self)
 
 
     def initSetup(self,road,is_top_lane):
@@ -75,12 +87,10 @@ class Car():
            vehicle is generated on."""
         lane = None
         if is_top_lane:
-            self.putOnObject(road.top_up_lane)
-            road.top_up_lane.putOnObject(self)
+            self.putOn(road.top_up_lane)
             lane = road.top_up_lane
         else:
-            self.putOnObject(road.bottom_down_lane)
-            road.bottom_down_lane.putOnObject(self)
+            self.putOn(road.bottom_down_lane)
             lane = road.bottom_down_lane
  
         
@@ -96,11 +106,14 @@ class Car():
         direction = self.heading
         disp = angularToCartesianDisplacement(x_disp,y_disp,direction)
   
-        self.y_com = lane.y+disp[1]
-        self.x_com = lane.x+disp[0]
+        lane_coords = lane.four_corners["front_left"]
+        lane_x = lane_coords[0]
+        lane_y = lane_coords[1]
+        self.y_com = lane_y+disp[1]
+        self.x_com = lane_x+disp[0]
 
         #The coordinates of each corner of the car
-        self.getFourCorners()
+        self.setFourCorners()
         
         #NOTE: In the future this should be changed so that intial speed is something
         #      reasonable and not just arbitrarily selected.
@@ -112,8 +125,10 @@ class Car():
            angle this determines how much the vehicle should move, and then resets the
            vehicles coordinates appropriately."""
         #The changes induced by the dynamics
-        x_dot = self.v*math.cos(math.radians(turn_angle))
-        y_dot = self.v*math.sin(math.radians(turn_angle))
+        x_dot = self.v*math.cos(math.radians(self.heading))
+        y_dot = self.v*math.sin(math.radians(self.heading))
+        #x_dot = self.v*math.cos(math.radians(turn_angle))
+        #y_dot = self.v*math.sin(math.radians(turn_angle))
         head_dot = turn_angle
         v_dot = accel
         
@@ -148,18 +163,73 @@ class Car():
                omega)))
 
 
-    #def checkOnRoad(self):
-        """Checks to make sure that the vehicle is still within the bounds of the 
-           road_classes object it is on. We have made a decision that if the 
-           vehicle is within the bounds of any object it is on (it might be
-           straddling two lanes or something"""
-    """    for obj in self.on:
-            on_direct = obj.direction
-            if self.outsideTheLines(obj,
-    """         
+    def checkNewOn(self):
+        candidates = []
+        dist = None
+        obj_coords = None
+        front,back = False,False
+        coord = self.four_corners
+        for obj in list(self.on):
+            front = False
+            back = False
+            obj_coord = obj.four_corners
+            if isinstance(obj,road_classes.Lane):
+                #Find the point that is possibly inside a junction
+                #The furthest a point could be into a junction is when angle is 45 degrees
+                min_front = min(obj_coord["front_left"],obj_coord["front_right"])
+                max_back = max(obj_coord["back_left"],obj_coord["back_right"])
+                if coord["front_left"][1]-min_front[1]<obj.width/math.sqrt(2): 
+                    candidates.append(obj.to_junction)
+                if max_back[1]-coord["front_left"][1]<obj.width/math.sqrt(2):
+                    candidates.append(obj.from_junction)
 
-    #def checkForTransition(self):
-         
+            if isinstance(obj,road_classes.Junction):
+                for lane in obj.in_lanes:
+                    if math.fabs(((lane.direction+180)%360)-self.direction)<45:
+                        candidates.append(lane)
+                for lane in obj.out_lanes:
+                    if math.fabs(lane.direction-self.direction)<45:
+                        candidates.append(lane)
+
+        for entry in candidates:
+            if checkOn(self,entry):
+                self.putOn(entry)
+
+
+    def checkNewOff(self):
+        left_right = None
+        top_bottom = None
+        for obj in self.on:
+            if not checkOn(self,obj):
+                self.takeOff(obj)
+
+    def checkForCrash(self):
+        """Determines whether or not the car has crashed into another object.
+           Returns True/False and a list containing all the objects it has crashed into
+           (empty if it has not crashed)"""
+        has_crashed = False
+        potentials,crashed = [],[]
+        for obj in self.on:
+            for entry in obj.on:
+                if entry not in potentials and entry is not self:
+                    potentials.append(entry)
+
+        for veh in potentials:
+            veh_coords = veh.four_corners
+            for entry in self.four_corners:
+                pt = self.four_corners[entry]
+                if sideOfLine(pt,veh_coords["front_left"],coords["front_right"])!=\
+                   sideOfLine(pt,veh_coords["back_left"],coords["back_right"]):
+                       has_crashed = True
+                       crashed.append(veh)
+                       break
+                if sideOfLine(pt,veh_coords["front_left"],coords["back_left"])!=\
+                   sideOfLine(pt,veh_coords["front_right"],coords["back_right"]):
+                       has_crashed = True
+                       crashed.append(veh)
+                       break
+        return has_crashed,crashed
+
 
     def checkPositState(self):
         """Check if the vehicle has crashed into any other vehicle/obstacle/run
@@ -167,9 +237,9 @@ class Car():
            object."""
 
         #First check if you are moving onto a new road section
-        self.checkForTransition()
-        self.checkForCrash()
-        self.checkOnRoad()
+        self.checkNewOn()
+        self.checkNewOff()
+        crashed,crash_list = self.checkForCrash()
 
 
     def sense(self):
@@ -180,8 +250,41 @@ class Car():
 
     def printStatus(self,mod=""):
         print("{}{}\tON: {}\tHEAD: {}\tSPEED: {}\tCOM: ({},{})".format(mod,\
-               self.label,self.on.label,self.heading,self.v,round(self.x_com,2),\
-               round(self.y_com,2)))
+               self.label,[x.label for x in self.on],self.heading,self.v,\
+               round(self.x_com,2),round(self.y_com,2)))
+
+
+def checkOn(car, obj):
+    """Returns true if the car is sufficiently on the object, and false otherwise.
+       'Sufficiently' means in at least one dimension the vehicle is entirely within
+       the boundary of the object, and in the other there are at least two wheels on"""
+    left_right = 0
+    top_bottom = 0
+    coords = obj.four_corners
+    for entry in car.four_corners:
+        pt = car.four_corners[entry]
+        if sideOfLine(pt,coords["front_left"],coords["front_right"]) !=\
+           sideOfLine(pt,coords["back_left"],coords["back_right"]):
+           top_bottom += 1
+        if sideOfLine(pt,coords["front_left"],coords["back_left"]) !=\
+           sideOfLine(pt,coords["front_right"],coords["back_right"]):
+           left_right += 1
+
+    if max(top_bottom,left_right)==4 and min(top_bottom,left_right)>=2:
+        return True
+    else:
+        return False
+
+
+def sideOfLine(pt,line_strt,line_end):
+    if line_strt[0] == line_end[0]:
+        m = 0
+    else:
+        m = (line_strt[1]-line_end[1])/(line_strt[0]-line_end[0])
+    y_test = line_strt[1] + m*(line_strt[0]-pt[0])
+    if pt[1]>y_test: return 1
+    elif pt[1]<y_test: return -1
+    else: return 0
 
 
 def angularToCartesianDisplacement(x_disp,y_disp,direction):

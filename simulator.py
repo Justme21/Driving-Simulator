@@ -52,14 +52,15 @@ junc_pairs = [(0,3),(3,1),(2,3)]
 junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,road_lengths,\
                                         junc_pairs)
 
-#cars = putCarsOnMap(roads,num_cars)
+cars = putCarsOnMap(roads,num_cars)
 
 
 map_builder.printContents(junctions[0])
 print("\n")
-#while(True):
-#    for entry in cars:
-#        entry.move(0,0)
-#        entry.printStatus()
-#        print("\n")
-#    time.sleep(.1)
+while(True):
+    for entry in cars:
+        entry.move(0,0)
+        entry.sense()
+        entry.printStatus()
+        print("\n")
+    time.sleep(.1)
