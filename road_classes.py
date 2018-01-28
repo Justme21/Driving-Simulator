@@ -272,6 +272,8 @@ class Lane():
         self.on = []
 
         #NOTE: Included to test structure construction using map_builder.print_contents
+        if is_top_up: label = str(label) + "T"
+        else: label = str(label) + "B"
         self.label = "L{}".format(label)
 
 

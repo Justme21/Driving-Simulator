@@ -41,11 +41,11 @@ class Car():
         self.on_road = True #Check if car still on road
         self.crashed = False #Check if car has crashed into something
 
+        self.label = "C{}".format(label)
+        
         #Initialise the position, velocity and heading features
         self.initSetup(road,is_top_lane)
         
-        self.label = "C{}".format(label)
-
 
     def setFourCorners(self):
         """Compute the initial coordinates of the four corners of the car (with respect
@@ -69,6 +69,9 @@ class Car():
 
 
     def putOn(self,obj):
+        """Want to include 'obj' in the set of objects that 'self' is on or that are on
+           'self'. If the object is not already in the list 'self.on' it is addded and,
+           symmetrically, if self is not in the object's list it is added"""
         if obj not in self.on:
             self.on.append(obj)
         if self not in obj.on:
@@ -76,6 +79,9 @@ class Car():
 
 
     def takeOff(self,obj):
+        """Remove object 'obj' from 'self's list of objects it is on or that are on it.
+           First remove the object from the list if it is on it, then check if self is
+           still on the object's list, in which case remove it."""
         if obj in self.on:
             self.on.remove(obj)
         if self in obj.on:
@@ -92,8 +98,7 @@ class Car():
         else:
             self.putOn(road.bottom_down_lane)
             lane = road.bottom_down_lane
- 
-        
+
         self.on_road = True #on_road is false if we run off the road
 
         #For simplicity we assume the car starts at the centre of the road, heading
@@ -142,27 +147,6 @@ class Car():
         self.heading += self.timestep*head_dot
 
 
-    def angularToCartesianDisplacement(x_disp,y_disp,direction):
-        phi = math.sqrt(x_disp**2 + y_disp**2)
-        delta = math.degrees(math.atan(x_disp/y_disp))
-
-        mod_x,mod_y = 1,1
-
-        #Direction is up/down
-        if (direction in range(46,135)) or (direction in range(226,315)):
-            if direction in range(46,135): mod_x *= -1
-            else: mod_y *= -1
-            omega = direction+delta
-        #Direction is left/right
-        else:
-            if direction in range(135,226): mod_x *= -1
-            else: mod_y *= -1
-            omega = direction-delta
-
-        return (mod_x*phi*math.cos(math.radians(omega)),mod_y*phi*math.sin(math.radians(\
-               omega)))
-
-
     def checkNewOn(self):
         candidates = []
         dist = None
@@ -170,8 +154,6 @@ class Car():
         front,back = False,False
         coord = self.four_corners
         for obj in list(self.on):
-            front = False
-            back = False
             obj_coord = obj.four_corners
             if isinstance(obj,road_classes.Lane):
                 #Find the point that is possibly inside a junction
@@ -249,9 +231,15 @@ class Car():
 
 
     def printStatus(self,mod=""):
-        print("{}{}\tON: {}\tHEAD: {}\tSPEED: {}\tCOM: ({},{})".format(mod,\
+        corner_labels = {"back_right":"br","back_left":"bl","front_right":"fr",\
+                         "front_left":"fl"}
+        dims = ""
+        for x in self.four_corners:
+            dims += "{}({},{}), ".format(corner_labels[x],round(self.four_corners[x][0],2),\
+                                         round(self.four_corners[x][1],2))
+        print("{}{}\tON: {}\tHEAD: {}\tSPEED: {}\n{}\t {}".format(mod,\
                self.label,[x.label for x in self.on],self.heading,self.v,\
-               round(self.x_com,2),round(self.y_com,2)))
+               self.label,dims))
 
 
 def checkOn(car, obj):
@@ -270,10 +258,19 @@ def checkOn(car, obj):
            sideOfLine(pt,coords["front_right"],coords["back_right"]):
            left_right += 1
 
+
+    print("{}: TB:{}\t LR:{}".format(obj.label,top_bottom,left_right))
+    car.printStatus()
+    obj.printStatus()
+    exit(-1)
     if max(top_bottom,left_right)==4 and min(top_bottom,left_right)>=2:
         return True
     else:
         return False
+
+
+def computeDistance(pt1,pt2):
+    #NOTE: Stopped here!
 
 
 def sideOfLine(pt,line_strt,line_end):
