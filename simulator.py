@@ -3,7 +3,7 @@ import random
 import time
 import vehicle_classes
 
-random.seed(493072)
+random.seed(49307)
 
 
 def putCarsOnMap(roads,num_cars,car_lanes=None):

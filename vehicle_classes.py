@@ -105,17 +105,22 @@ class Car():
         # parallel to the course of the road
         self.heading = lane.direction
 
-        x_disp = lane.width/2
+        x_disp = round(lane.width/2,2)
         #Randomly place the car somewhere along the length of the road
-        y_disp = (self.length/2)+ random.random()*(lane.length-self.length)
+        y_disp = round((self.length/2)+ random.random()*(lane.length-self.length),2)
         direction = self.heading
         disp = angularToCartesianDisplacement(x_disp,y_disp,direction)
   
         lane_coords = lane.four_corners["front_left"]
         lane_x = lane_coords[0]
         lane_y = lane_coords[1]
-        self.y_com = lane_y+disp[1]
-        self.x_com = lane_x+disp[0]
+        self.y_com = round(lane_y+disp[1],2)
+        self.x_com = round(lane_x+disp[0],2)
+
+        print("TEST BEGIN")
+        print("LANE: ({},{})\tDIREC: {}\tCAR: ({},{})\tDISP: ({},{}))".format(\
+               lane_x,lane_y,direction,self.x_com,self.y_com,disp[0],disp[1]))
+        print("TEST END")
 
         #The coordinates of each corner of the car
         self.setFourCorners()
@@ -158,11 +163,15 @@ class Car():
             if isinstance(obj,road_classes.Lane):
                 #Find the point that is possibly inside a junction
                 #The furthest a point could be into a junction is when angle is 45 degrees
-                min_front = min(obj_coord["front_left"],obj_coord["front_right"])
-                max_back = max(obj_coord["back_left"],obj_coord["back_right"])
-                if coord["front_left"][1]-min_front[1]<obj.width/math.sqrt(2): 
+                front_pt = [(obj_coord["front_left"][i] + \
+                            obj_coord["front_right"][i])/2 for i in range(2)]
+                back_pt = [(obj_coord["back_left"][i] + \
+                            obj_coord["back_right"][i])/2 for i in range(2)]
+                if computeDistance((self.x_com,self.y_com),front_pt) < \
+                    obj.width+self.length/2 : 
                     candidates.append(obj.to_junction)
-                if max_back[1]-coord["front_left"][1]<obj.width/math.sqrt(2):
+                if computeDistance((self.x_com,self.y_com),back_pt) < \
+                    obj.width+self.length/2 : 
                     candidates.append(obj.from_junction)
 
             if isinstance(obj,road_classes.Junction):
@@ -182,8 +191,10 @@ class Car():
         left_right = None
         top_bottom = None
         for obj in self.on:
+            print("Checking if off {}".format(obj.label))
             if not checkOn(self,obj):
                 self.takeOff(obj)
+
 
     def checkForCrash(self):
         """Determines whether or not the car has crashed into another object.
@@ -220,7 +231,9 @@ class Car():
 
         #First check if you are moving onto a new road section
         self.checkNewOn()
+        print("Done Checking On")
         self.checkNewOff()
+        print("Done Checking Off")
         crashed,crash_list = self.checkForCrash()
 
 
@@ -270,12 +283,13 @@ def checkOn(car, obj):
 
 
 def computeDistance(pt1,pt2):
-    #NOTE: Stopped here!
+    return math.sqrt((pt2[1]-pt1[1])**2 + (pt2[0]-pt1[0])**2)
 
 
 def sideOfLine(pt,line_strt,line_end):
     if line_strt[0] == line_end[0]:
-        m = 0
+        if pt[0]>line_strt[0]: return -1
+        else: return 1
     else:
         m = (line_strt[1]-line_end[1])/(line_strt[0]-line_end[0])
     y_test = line_strt[1] + m*(line_strt[0]-pt[0])
@@ -287,19 +301,7 @@ def sideOfLine(pt,line_strt,line_end):
 def angularToCartesianDisplacement(x_disp,y_disp,direction):
     phi = math.sqrt(x_disp**2 + y_disp**2)
     delta = math.degrees(math.atan(x_disp/y_disp))
+    omega = direction + delta
 
-    mod_x,mod_y = 1,1
-
-    #Direction is up/down
-    if (direction in range(46,135)) or (direction in range(226,315)):
-        if direction in range(46,135): mod_x *= -1
-        else: mod_y *= -1
-        omega = direction+delta
-    #Direction is left/right
-    else:
-        if direction in range(135,226): mod_x *= -1
-        else: mod_y *= -1
-        omega = direction-delta
-
-    return (mod_x*phi*math.cos(math.radians(omega)),mod_y*phi*math.sin(math.radians(\
+    return (-phi*math.cos(math.radians(omega)),phi*math.sin(math.radians(\
            omega)))
