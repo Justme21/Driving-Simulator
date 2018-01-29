@@ -49,6 +49,10 @@ road_lengths = [30,30,30]
 
 junc_pairs = [(0,3),(3,1),(2,3)]
 
+
+clock = 0
+runtime = 1.5
+
 junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,road_lengths,\
                                         junc_pairs)
 
@@ -57,10 +61,16 @@ cars = putCarsOnMap(roads,num_cars)
 
 map_builder.printContents(junctions[0])
 print("\n")
-while(True):
+t0 = time.time()
+while(clock<runtime):
+    print("TIME: {}".format(clock))
     for entry in cars:
         entry.move(0,0)
         entry.sense()
+        print("\nEnd Of Round Status Update:")
         entry.printStatus()
         print("\n")
+    clock += .1
     time.sleep(.1)
+t1 = time.time()
+print("Runtime is {}".format(t1-t0))

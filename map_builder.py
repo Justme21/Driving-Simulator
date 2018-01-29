@@ -109,7 +109,6 @@ def constructPhysicalOverlay(junctions):
     # the x values and one to update the y's
     anchor_point[0] -= min_X
     anchor_point[1] -= min_Y
-    print("BREAK HERE")
     setAnchorPosit(anchor_junc,anchor_point)
     
 

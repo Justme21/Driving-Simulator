@@ -136,7 +136,8 @@ class Car():
            vehicles coordinates appropriately."""
         #The changes induced by the dynamics
         x_dot = self.v*math.cos(math.radians(self.heading))
-        y_dot = self.v*math.sin(math.radians(self.heading))
+        #y_dot is set as negative to reflect the fact the pygame coordinate space
+        y_dot = -self.v*math.sin(math.radians(self.heading))
         #x_dot = self.v*math.cos(math.radians(turn_angle))
         #y_dot = self.v*math.sin(math.radians(turn_angle))
         head_dot = turn_angle
@@ -168,21 +169,34 @@ class Car():
                 back_pt = [(obj_coord["back_left"][i] + \
                             obj_coord["back_right"][i])/2 for i in range(2)]
                 if computeDistance((self.x_com,self.y_com),front_pt) < \
-                    obj.width+self.length/2 : 
+                    obj.width+self.length/2 and obj.to_junction not in self.on: 
                     candidates.append(obj.to_junction)
                 if computeDistance((self.x_com,self.y_com),back_pt) < \
-                    obj.width+self.length/2 : 
+                    obj.width+self.length/2 and obj.from_junction not in self.on: 
                     candidates.append(obj.from_junction)
 
+                if obj.lane_twin not in self.on:
+                    candidates.append(obj.lane_twin)
+
             if isinstance(obj,road_classes.Junction):
+                print("Testing Candidates in Junction {}".format(obj.label))
                 for lane in obj.in_lanes:
-                    if math.fabs(((lane.direction+180)%360)-self.direction)<45:
+                    print("IN: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(obj.label,\
+                           self.heading,lane.direction,(lane.direction+180)%360))
+                    if math.fabs(((lane.direction+180)%360)-self.heading)<45:
                         candidates.append(lane)
                 for lane in obj.out_lanes:
-                    if math.fabs(lane.direction-self.direction)<45:
+                    print("OUT: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(obj.label,\
+                           self.heading,(lane.direction+180)%360,lane.direction))
+                    if math.fabs(lane.direction-self.heading)<45:
                         candidates.append(lane)
 
+        return candidates
+
+
+    def testCandidates(self,candidates):
         for entry in candidates:
+            print("Testing Candidate {}".format(entry.label))
             if checkOn(self,entry):
                 self.putOn(entry)
 
@@ -190,7 +204,7 @@ class Car():
     def checkNewOff(self):
         left_right = None
         top_bottom = None
-        for obj in self.on:
+        for obj in list(self.on):
             print("Checking if off {}".format(obj.label))
             if not checkOn(self,obj):
                 self.takeOff(obj)
@@ -230,9 +244,11 @@ class Car():
            object."""
 
         #First check if you are moving onto a new road section
-        self.checkNewOn()
+        print("Checking On Anything New")
+        on_candidates = self.checkNewOn()
         print("Done Checking On")
         self.checkNewOff()
+        self.testCandidates(on_candidates)
         print("Done Checking Off")
         crashed,crash_list = self.checkForCrash()
 
@@ -275,7 +291,7 @@ def checkOn(car, obj):
     print("{}: TB:{}\t LR:{}".format(obj.label,top_bottom,left_right))
     car.printStatus()
     obj.printStatus()
-    exit(-1)
+    print("\n")
     if max(top_bottom,left_right)==4 and min(top_bottom,left_right)>=2:
         return True
     else:
@@ -292,7 +308,7 @@ def sideOfLine(pt,line_strt,line_end):
         else: return 1
     else:
         m = (line_strt[1]-line_end[1])/(line_strt[0]-line_end[0])
-    y_test = line_strt[1] + m*(line_strt[0]-pt[0])
+    y_test = line_strt[1] + m*(pt[0]-line_strt[0])
     if pt[1]>y_test: return 1
     elif pt[1]<y_test: return -1
     else: return 0
