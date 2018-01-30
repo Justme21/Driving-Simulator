@@ -31,11 +31,10 @@ class Junction():
                              "back_right":None}
         
         #This is mainly for ease of determining if a car has left whatever it is on
-        #NOTE: If the value of self.direction is ever changed from 90 revise updteCoords
+        #NOTE: If the value of self.direction is changed from 90 revise updteCoords
         self.direction = 90
 
-        #on is a list of all objects currently on the junction
-        # Might be useful
+        #self.on is a list of all objects currently on the junction
         self.on = []
 
         #NOTE: Included to test structure construction using print_contents in
@@ -47,7 +46,7 @@ class Junction():
         """Updates the location of the four corners of the junction such that the
            specified corner (corner) has the set coordinates (coords).
            If the update was called from a road then in_road is a reference to that road
-           (this is used to omit this road when the update is passed on to adjoined roads,
+           (this is used to omit road when the update is passed on to adjoined roads,
            preventing looping).
            In map_builder it is an update to a junction that begins the process of 
            anchoring the graph in map_builder.construct_physical_overlay."""
@@ -98,7 +97,8 @@ class Junction():
 
 
     def putOn(self,obj):
-        """Adds an object (obj) to the list of things currently on the junction"""
+        """Adds an object (obj) to the list of things currently on the junction.
+           For thoroughness also puts on obj.on if not already there."""
         if obj not in self.on:
             self.on.append(obj)
         if self not in obj.on:
@@ -106,6 +106,8 @@ class Junction():
 
 
     def takeOff(self,obj):
+        """Removes an object (obj) from the list of things currently on the junction.
+           For thoroughness also takes from obj.on if still there"""
         if obj in self.on:
             self.on.remove(obj)
         if self in obj.on:
@@ -212,7 +214,8 @@ class Road():
 
 
     def putOn(self,obj):
-        """Adds a reference to an object to the list of objects 'on' the road"""
+        """Adds a reference to an object to the list of objects 'on' the road.
+           Also adds self to obj.on if not already there."""
         if obj not in self.on:
             self.on.append(obj)
         if self not in obj.on:
@@ -220,6 +223,8 @@ class Road():
 
  
     def takeOff(self,obj):
+        """Removes reference to object from self.on. Also removes self from obj.on
+           if not already done."""
         if obj in self.on:
             self.on.remove(obj)
         if self in obj.on:
@@ -268,7 +273,6 @@ class Lane():
 
 
         #on is a list of all objects currently on the junction
-        # Might be useful
         self.on = []
 
         #NOTE: Included to test structure construction using map_builder.print_contents
@@ -296,6 +300,8 @@ class Lane():
 
 
     def takeOff(self,obj):
+        """Removes obj from self.on if it is there. Also removes self from
+           obj.on if it has not already been removed"""
         if obj in self.on:
             self.on.remove(obj)
         if self in obj.on:
@@ -330,15 +336,20 @@ class Lane():
 def setFourCorners(obj,corner,coords):
     """Given an object from road_classes this assigns values to each of the entries in
        the dictionary four_corners (element of each object). Before this function
-       is called one of the values for four_corners is set. This function"""
+       is called one of the values for four_corners is set. This function then 
+       cycles through the remaining corners in order so that each value can be 
+       determined from those set immediately before"""
 
     obj.four_corners[corner] = list(coords)
     order = {"back_right":"front_right","front_right":"front_left",\
              "front_left":"back_left","back_left":"back_right"}
     start = corner
+    #Copy start to know when we have travelled all the points on the 
+    # edge of the shape
     end = str(start)
     pt_init = None
     direc,disp = None,None
+    #Iterate through all the corners until there are none left that are not set
     while start is not end or direc is None:
         if start is "back_right":
             direc = math.radians(obj.direction)

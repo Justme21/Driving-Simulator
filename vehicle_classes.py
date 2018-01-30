@@ -8,7 +8,7 @@ car_length = 4.17
 car_width = 1.7
 
 class Car():
-    def __init__(self,road,is_top_lane,label,timestep=.1):
+    def __init__(self,road,is_top_lane,v,label,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -44,7 +44,7 @@ class Car():
         self.label = "C{}".format(label)
         
         #Initialise the position, velocity and heading features
-        self.initSetup(road,is_top_lane)
+        self.initSetup(road,v,is_top_lane)
         
 
     def setFourCorners(self):
@@ -88,7 +88,7 @@ class Car():
             obj.takeOff(self)
 
 
-    def initSetup(self,road,is_top_lane):
+    def initSetup(self,road,v,is_top_lane):
         """Performing initial setup of the car. Input is reference to lane that the
            vehicle is generated on."""
         lane = None
@@ -117,6 +117,7 @@ class Car():
         self.y_com = round(lane_y+disp[1],2)
         self.x_com = round(lane_x+disp[0],2)
 
+        #NOTE" DEBUGGING
         print("TEST BEGIN")
         print("LANE: ({},{})\tDIREC: {}\tCAR: ({},{})\tDISP: ({},{}))".format(\
                lane_x,lane_y,direction,self.x_com,self.y_com,disp[0],disp[1]))
@@ -127,7 +128,7 @@ class Car():
         
         #NOTE: In the future this should be changed so that intial speed is something
         #      reasonable and not just arbitrarily selected.
-        self.v = 5.5 #19.8km/h units are metres per second 
+        self.v = v #19.8km/h units are metres per second 
 
 
     def move(self,accel,turn_angle):
@@ -154,20 +155,28 @@ class Car():
 
 
     def checkNewOn(self):
+        """Check to see if self is now on any of the environment objects that it 
+           was not on in the previous round."""
+        #The list of objects we need to test to check if we are on.
         candidates = []
         dist = None
         obj_coords = None
-        front,back = False,False
         coord = self.four_corners
+        #We know the only new things we might be on must be linked to things
+        # we were already on. Thus we find candidates by considering self.on.
         for obj in list(self.on):
             obj_coord = obj.four_corners
+            
             if isinstance(obj,road_classes.Lane):
-                #Find the point that is possibly inside a junction
-                #The furthest a point could be into a junction is when angle is 45 degrees
+                #We compute the distance from the car to the object by choosing
+                #The midpoint of each end of the object (easiest).
                 front_pt = [(obj_coord["front_left"][i] + \
                             obj_coord["front_right"][i])/2 for i in range(2)]
                 back_pt = [(obj_coord["back_left"][i] + \
                             obj_coord["back_right"][i])/2 for i in range(2)]
+                #If front of car is within lane_width of front/back of lane
+                #Then it is worth checking if we have transitioned onto the
+                #next/previous junction for the lane.
                 if computeDistance((self.x_com,self.y_com),front_pt) < \
                     obj.width+self.length/2 and obj.to_junction not in self.on: 
                     candidates.append(obj.to_junction)
@@ -175,10 +184,15 @@ class Car():
                     obj.width+self.length/2 and obj.from_junction not in self.on: 
                     candidates.append(obj.from_junction)
 
+                #It is always worth checking to make sure we have not drifted
+                #onto opposite lane.
                 if obj.lane_twin not in self.on:
                     candidates.append(obj.lane_twin)
 
             if isinstance(obj,road_classes.Junction):
+                #If we are on a junction we only check to see if we are on a 
+                # lane whose angle is sufficiently similar to our own (within 45 degrees).
+                # It might be better to test for distance, but it feels unnecessary.
                 print("Testing Candidates in Junction {}".format(obj.label))
                 for lane in obj.in_lanes:
                     print("IN: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(obj.label,\
@@ -195,6 +209,8 @@ class Car():
 
 
     def testCandidates(self,candidates):
+        """Given a list of candidates it tests to see if self in on any of them.
+           If there is evidence that self is on a candidate it is put on self.on"""
         for entry in candidates:
             print("Testing Candidate {}".format(entry.label))
             if checkOn(self,entry):
@@ -202,6 +218,8 @@ class Car():
 
 
     def checkNewOff(self):
+        """Checks if there is evidence that self has left any of the objects
+           in self.on"""
         left_right = None
         top_bottom = None
         for obj in list(self.on):
@@ -225,13 +243,10 @@ class Car():
             veh_coords = veh.four_corners
             for entry in self.four_corners:
                 pt = self.four_corners[entry]
-                if sideOfLine(pt,veh_coords["front_left"],coords["front_right"])!=\
-                   sideOfLine(pt,veh_coords["back_left"],coords["back_right"]):
-                       has_crashed = True
-                       crashed.append(veh)
-                       break
-                if sideOfLine(pt,veh_coords["front_left"],coords["back_left"])!=\
-                   sideOfLine(pt,veh_coords["front_right"],coords["back_right"]):
+                if sideOfLine(pt,veh_coords["front_left"],veh_coords["front_right"])!=\
+                   sideOfLine(pt,veh_coords["back_left"],veh_coords["back_right"]) and\
+                   sideOfLine(pt,veh_coords["front_left"],veh_coords["back_left"])!=\
+                   sideOfLine(pt,veh_coords["front_right"],veh_coords["back_right"]):
                        has_crashed = True
                        crashed.append(veh)
                        break
@@ -251,7 +266,12 @@ class Car():
         self.testCandidates(on_candidates)
         print("Done Checking Off")
         crashed,crash_list = self.checkForCrash()
-
+        if crashed:
+            print("Oh MY GOSH A CRASH!")
+            self.printStatus()
+            for entry in crash_list:
+                entry.printStatus()
+            exit(-1)
 
     def sense(self):
         """Change the sense variables to match the vehicle's new position/capture
@@ -299,10 +319,14 @@ def checkOn(car, obj):
 
 
 def computeDistance(pt1,pt2):
+    """Compute the L2 distance between two points"""
     return math.sqrt((pt2[1]-pt1[1])**2 + (pt2[0]-pt1[0])**2)
 
 
 def sideOfLine(pt,line_strt,line_end):
+    """Determine which side of the line segment [line_strt,line_end] the point
+       pt lies on."""
+    #Slope here is infinite so side of the line comes down to the x-values
     if line_strt[0] == line_end[0]:
         if pt[0]>line_strt[0]: return -1
         else: return 1
@@ -315,6 +339,8 @@ def sideOfLine(pt,line_strt,line_end):
 
 
 def angularToCartesianDisplacement(x_disp,y_disp,direction):
+    """Translates a displacement in a specified direction into displacement along the 
+       standard basis axes"""
     phi = math.sqrt(x_disp**2 + y_disp**2)
     delta = math.degrees(math.atan(x_disp/y_disp))
     omega = direction + delta
