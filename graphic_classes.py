@@ -2,8 +2,6 @@ import pygame
 import road_classes
 import vehicle_classes
 
-UNIT = 10
-
 BLACK = (0,0,0)
 RED = (255,0,0)
 GREEN = (0,255,0)
@@ -41,7 +39,7 @@ class GraphicWrapper(pygame.sprite.Sprite):
             self.extras = []
 
 
-    def draw(self,is_default=True,extra_default=True):
+    def draw(self,unit,is_default=True,extra_default=True):
         if self.overwrite:
             self.surface.fill(INVIS)
         crnr = self.obj.four_corners
@@ -49,13 +47,13 @@ class GraphicWrapper(pygame.sprite.Sprite):
                        crnr["back_left"]]
 
         for i,entry in enumerate(corner_list):
-            corner_list[i] = [UNIT*k for k in entry]
+            corner_list[i] = [unit*k for k in entry]
         if is_default: 
             color = self.default_color
         else:
             color = self.backup_color
         pygame.draw.polygon(self.surface,color,corner_list,0)
         for entry in self.extras:
-            entry.draw(extra_default)
+            entry.draw(unit,extra_default)
         self.rect = self.surface.get_rect()
         self.image = self.surface
