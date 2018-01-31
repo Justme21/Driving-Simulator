@@ -2,7 +2,6 @@ import pygame
 import road_classes
 import vehicle_classes
 
-screen_width,screen_height = 1024,640
 UNIT = 10
 
 BLACK = (0,0,0)
@@ -10,13 +9,13 @@ RED = (255,0,0)
 GREEN = (0,255,0)
 BLUE = (0,0,255)
 DARK_BLUE = (0,0,128)
-WHITE = (255,255,255)
 
 INVIS = (255,0,255)
 
 class GraphicWrapper(pygame.sprite.Sprite):
-    def __init__(self,obj,surface = None,overwrite=True):
+    def __init__(self,obj,width,height,surface=None,overwrite=True):
         super().__init__()
+        print("WIDTH: {}\tHEIGHT: {}".format(width,height))
         self.obj = obj
         self.image = None
         self.overwrite = overwrite
@@ -29,15 +28,15 @@ class GraphicWrapper(pygame.sprite.Sprite):
             if not obj.is_top_up:
                 self.backup_color = RED
         if surface is None:
-            self.surface = pygame.Surface((screen_width,screen_height))
+            self.surface = pygame.Surface((width,height))
             self.surface.fill(INVIS)
             self.surface.set_colorkey(INVIS)
         else:
             self.surface = surface
       
         if isinstance(obj,road_classes.Road):
-            self.extras = [GraphicWrapper(obj.top_up_lane,self.surface,False),\
-                           GraphicWrapper(obj.bottom_down_lane,self.surface,False)]
+            self.extras = [GraphicWrapper(obj.top_up_lane,width,height,self.surface,False),\
+                       GraphicWrapper(obj.bottom_down_lane,width,height,self.surface,False)]
         else:
             self.extras = []
 

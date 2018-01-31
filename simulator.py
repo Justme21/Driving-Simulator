@@ -1,4 +1,6 @@
+import graphic_simulator
 import map_builder
+from optparse import OptionParser
 import random
 import time
 import vehicle_classes
@@ -19,14 +21,17 @@ def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None):
         car_lanes = []
         for _ in range(num_cars):
             car_lanes.append((random.randint(0,num_roads-1),random.randint(0,1)))
+            car_speeds.append(5.5)
 
     #Each entry in car_lanes is the address of a road, and a lane on that road where
     # the car should be placed. Once initialised with this information the Car object
     # will give itself a random location on the specified lane with the same heading as
     # the lane.
     for i,entry in enumerate(car_lanes):
-        cars.append(vehicle_classes.Car(roads[car_lanes[i][0]],car_lanes[i][1],i))
+        cars.append(vehicle_classes.Car(roads[car_lanes[i][0]],car_lanes[i][1],\
+                    car_speeds[i],i))
     return cars
+
 
 #Figure of eight
 #num_junctions = 6
@@ -44,6 +49,8 @@ num_junctions = 4
 num_roads = 3
 num_cars = 2
 
+run_graphics = True
+
 road_angles = [180,0,50]
 road_lengths = [30,30,30]
 
@@ -51,7 +58,7 @@ junc_pairs = [(0,3),(3,1),(2,3)]
 
 
 clock = 0
-runtime = 1.5
+runtime = 2.5
 
 junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,road_lengths,\
                                         junc_pairs)
@@ -60,6 +67,8 @@ car_speeds = [5.5,0]
 car_lanes = [(0,1),(1,1)]
 cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes)
 
+if run_graphics:
+    g_sim = graphic_simulator.GraphicSimulator(junctions,roads,cars)
 
 map_builder.printContents(junctions[0])
 print("\n")
@@ -72,7 +81,8 @@ while(clock<runtime):
         print("\nEnd Of Round Status Update:")
         entry.printStatus()
         print("\n")
+    g_sim.update()
+    
     clock += .1
-    time.sleep(.1)
 t1 = time.time()
 print("Runtime is {}".format(t1-t0))
