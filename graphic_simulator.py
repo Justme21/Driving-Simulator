@@ -29,10 +29,11 @@ class GraphicSimulator():
 
 
     def update(self):
-        for lizt in [self.junc_list,self.road_list,self.car_list]:
-            lizt = updateList(lizt)
+        if not self.is_quit:
+            for lizt in [self.junc_list,self.road_list,self.car_list]:
+                lizt = updateList(lizt)
 
-        self.checkForQuit()
+            self.checkForQuit()
 
         if not self.is_quit:
             self.screen.blit(self.background,(0,0))
