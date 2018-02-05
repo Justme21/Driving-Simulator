@@ -5,7 +5,7 @@ import random
 import time
 import vehicle_classes
 
-random.seed(49307)
+#random.seed(49307)
 
 def listFixer(target_list,good_dim,bound_low,bound_high):
     if target_list is None:
@@ -48,57 +48,65 @@ def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None):
     return cars
 
 
-#Figure of eight
-num_junctions = 6
-num_roads = 7
-num_cars = 1
+def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
+                  run_graphics,car_speeds=None,car_lanes=None):
 
-road_angles = [90,90,180,180,180,90,90]
-road_lengths = [30,30,30,30,30,30,30]
+    clock = 0
+    runtime = 5.5
 
-junc_pairs = [(0,1),(1,2),(3,2),(4,1),(5,0),(4,3),(5,4)]
+    junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,\
+                                           road_lengths,junc_pairs)
+    car_speeds = None
+    car_lanes = None
+    #car_speeds = [5.5,0]
+    #car_lanes = [(0,1),(1,1)]
+    cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes)
 
+    if run_graphics:
+        g_sim = graphic_simulator.GraphicSimulator(junctions,roads,cars)
 
-#3-road intersection
-#num_junctions = 4
-#num_roads = 3
-#num_cars = 2
-
-run_graphics = True
-
-#road_angles = [180,0,50]
-#road_lengths = [30,30,30]
-
-#junc_pairs = [(0,3),(3,1),(2,3)]
-
-
-clock = 0
-runtime = 5.5
-
-junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,road_lengths,\
-                                        junc_pairs)
-car_speeds = None
-car_lanes = None
-#car_speeds = [5.5,0]
-#car_lanes = [(0,1),(1,1)]
-cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes)
-
-if run_graphics:
-    g_sim = graphic_simulator.GraphicSimulator(junctions,roads,cars)
-
-map_builder.printContents(junctions[0])
-print("\n")
-t0 = time.time()
-while(clock<runtime):
-    print("TIME: {}".format(clock))
-    for entry in cars:
-        entry.move(0,0)
-        entry.sense()
-        print("\nEnd Of Round Status Update:")
-        entry.printStatus()
-        print("\n")
-    g_sim.update()
+    map_builder.printContents(junctions[0])
+    print("\n")
+    t0 = time.time()
+    while(clock<runtime):
+        print("TIME: {}".format(clock))
+        for entry in cars:
+            entry.move(0,0)
+            entry.sense()
+            print("\nEnd Of Round Status Update:")
+            entry.printStatus()
+            print("\n")
+        if run_graphics:
+            g_sim.update()
     
-    clock += .1
-t1 = time.time()
-print("Runtime is {}".format(t1-t0))
+        clock += .1
+    t1 = time.time()
+    print("Runtime is {}".format(t1-t0))
+
+if __name__ == "__main__":
+    #Figure of eight
+    num_junctions = 6
+    num_roads = 7
+    num_cars = 1
+
+    road_angles = [90,90,180,180,180,90,90]
+    road_lengths = [30,30,30,30,30,30,30]
+
+    junc_pairs = [(0,1),(1,2),(3,2),(4,1),(5,0),(4,3),(5,4)]
+
+    #3-road intersection
+    #num_junctions = 4
+    #num_roads = 3
+    #num_cars = 2
+    
+    #road_angles = [180,0,50]
+    #road_lengths = [30,30,30]
+
+    #junc_pairs = [(0,3),(3,1),(2,3)]
+
+    car_speeds = [5.5,0]
+    car_lanes = [(0,1),(1,1)]
+
+    run_graphics = True
+    runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
+                  run_graphics)

@@ -1,4 +1,5 @@
 import random
+import simulator
 
 #random.seed(493072)
 
@@ -178,8 +179,9 @@ class Graph():
            connections created)"""
         print("NODES: {}\nLINKS: {}".format(self.num_nodes,self.num_links))
         for entry in self.link_list:
-            print("OUT: {}\tANGLE: {}\tIN: {}".format(entry.from_node.label,entry.angle,\
-                                                entry.to_node.label))
+            print("OUT: {} {}\tANGLE: {}\tIN: {} {}".format(entry.from_node.label,\
+                      entry.from_node.coordinates,entry.angle,entry.to_node.label,\
+                      entry.to_node.coordinates))
 
 
 class Node():
@@ -250,7 +252,7 @@ def partitionAngles(angles):
             label = "right"
         direction_dict[label].append(entry)
     return direction_dict
-        
+
 
 def angleTest(angles,num_junctions,num_roads):
     top_bottom = [x for x in angles if x in range(46,135) or x in range(226,315)]
@@ -265,7 +267,9 @@ def angleTest(angles,num_junctions,num_roads):
 def probAngleSetter(num_angles,rnge):
     prob_angle_list = []
     for i in range(num_angles):
-        prob_angle_list.append(random.randint(rnge[0],rnge[1]))
+        #prob_angle_list.append(random.randint(rnge[0],rnge[1]))
+        angle = random.randint(rnge[0],rnge[1])
+        prob_angle_list.append(angle-angle%90)
     return prob_angle_list
 
 def randomiseAngles(count,num_junctions,ang_list):
@@ -278,13 +282,16 @@ def randomiseAngles(count,num_junctions,ang_list):
     return ang_list,count
 
 
-def generateAngles(num_junctions,num_roads):
-    num_up = None    
+def generateAngles(num_junctions,num_roads,spec_num_up):
+    num_up = None
     angles = []
     count = None
 
-    while num_up is None or num_up > 2*num_junctions:
-        num_up = random.randint(0,num_roads)
+    if spec_num_up is None:
+        while num_up is None or num_up > 2*num_junctions:
+            num_up = random.randint(0,num_roads)
+    else:
+        num_up = spec_num_up
 
     up_angles = [x for x in probAngleSetter(num_up,(46,135))]
     left_angles = [x for x in probAngleSetter(num_roads-num_up,(135,226))]
@@ -301,15 +308,40 @@ def generateAngles(num_junctions,num_roads):
     return angles
 
 
-num_junctions = 3
-num_roads = 3
+def constructSimulation(graph,num_cars,run_graphics):
+    num_junctions = len(graph.node_list)
+    num_roads = len(graph.link_list)
 
+    road_angles = [x.angle for x in graph.link_list]
+    #NOTE: This is a temporary fix. When loops emerge this will not be good enough
+    road_lengths = [random.choice([25,100]) for _ in range(num_roads)]
+
+    junc_pairs = []
+    pre,post = None,None
+    for link in graph.link_list:
+        pre = link.from_node
+        post = link.to_node
+        if pre.coordinates[0]<post.coordinates[0] or pre.coordinates[1]<pre.coordinates[1]:
+            junc_pairs.append((pre.label,post.label))
+        else:
+            junc_pairs.append((post.label,pre.label))
+
+    simulator.runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,\
+                           junc_pairs,run_graphics)
+
+num_junctions = 6
+num_roads = 7
+num_cars = 5
+run_graphics = True
+
+num_up = None
 angles = None
 
 if angles is None or len(angles)!= num_roads or  angleTest(angles,num_junctions,num_roads)!=0:
-    angles = generateAngles(num_junctions,num_roads)
+    angles = generateAngles(num_junctions,num_roads,num_up)
 
 sorted_angles = partitionAngles(angles)
+print("SORTED: {}".format(sorted_angles))
 temp = None
 for entry in sorted_angles:
     while len(sorted_angles[entry])>num_junctions:
@@ -320,3 +352,4 @@ for entry in sorted_angles:
 graph = Graph()
 graph.buildGraph(sorted_angles,graph.node_list[0],num_junctions,num_roads)
 graph.printStatus()
+constructSimulation(graph,num_cars,run_graphics)
