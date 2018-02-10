@@ -267,9 +267,9 @@ def angleTest(angles,num_junctions,num_roads):
 def probAngleSetter(num_angles,rnge):
     prob_angle_list = []
     for i in range(num_angles):
-        #prob_angle_list.append(random.randint(rnge[0],rnge[1]))
-        angle = random.randint(rnge[0],rnge[1])
-        prob_angle_list.append(angle-angle%90)
+        prob_angle_list.append(random.randint(rnge[0],rnge[1]))
+        #angle = random.randint(rnge[0],rnge[1])
+        #prob_angle_list.append(angle-angle%90)
     return prob_angle_list
 
 def randomiseAngles(count,num_junctions,ang_list):

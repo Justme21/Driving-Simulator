@@ -83,26 +83,27 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
     t1 = time.time()
     print("Runtime is {}".format(t1-t0))
 
+
 if __name__ == "__main__":
     #Figure of eight
-    num_junctions = 6
-    num_roads = 7
-    num_cars = 1
+    #num_junctions = 6
+    #num_roads = 7
+    #num_cars = 1
 
-    road_angles = [90,90,180,180,180,90,90]
-    road_lengths = [30,30,30,30,30,30,30]
+    #road_angles = [90,90,180,180,180,90,90]
+    #road_lengths = [30,30,30,30,30,30,30]
 
-    junc_pairs = [(0,1),(1,2),(3,2),(4,1),(5,0),(4,3),(5,4)]
+    #junc_pairs = [(0,1),(1,2),(3,2),(4,1),(5,0),(4,3),(5,4)]
 
     #3-road intersection
-    #num_junctions = 4
-    #num_roads = 3
-    #num_cars = 2
+    num_junctions = 4
+    num_roads = 3
+    num_cars = 2
     
-    #road_angles = [180,0,50]
-    #road_lengths = [30,30,30]
+    road_angles = [180,0,50]
+    road_lengths = [30,30,30]
 
-    #junc_pairs = [(0,3),(3,1),(2,3)]
+    junc_pairs = [(0,3),(3,1),(2,3)]
 
     car_speeds = [5.5,0]
     car_lanes = [(0,1),(1,1)]
