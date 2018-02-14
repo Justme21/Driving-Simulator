@@ -13,7 +13,6 @@ INVIS = (255,0,255)
 class GraphicWrapper(pygame.sprite.Sprite):
     def __init__(self,obj,width,height,surface=None,overwrite=True):
         super().__init__()
-        print("WIDTH: {}\tHEIGHT: {}".format(width,height))
         self.obj = obj
         self.image = None
         self.overwrite = overwrite

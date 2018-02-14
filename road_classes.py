@@ -199,7 +199,7 @@ class Road():
             elif direction in range(271,315):
                 if next_is_to: tag = ["front_right","front_left"]
                 else: tag = ["back_left","back_right"]
-            elif direction in range(316,360):
+            elif direction in range(315,360):
                 if next_is_to: tag = ["back_left","front_right"]
                 else: tag = ["front_right","back_left"]
             else:
@@ -367,4 +367,5 @@ def setFourCorners(obj,corner,coords):
         pt_init = obj.four_corners[start]
         obj.four_corners[order[start]] = [round(pt_init[0] + disp*math.cos(direc),2), \
                                           round(pt_init[1] - disp*math.sin(direc),2)]
+        
         start = order[start]

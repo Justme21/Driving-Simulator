@@ -1,3 +1,4 @@
+import math
 import random
 import simulator
 
@@ -18,6 +19,9 @@ class Graph():
         #The number of nodes in the graph
         self.num_nodes = 1
         
+        #Number of times it has been attempted to fix an incomplete graph
+        self.try_count = 0
+
         #By default the graph's first node is generated with coordinates (0,0)
         node = Node(0,0,0)
         self.node_list.append(node)
@@ -38,6 +42,24 @@ class Graph():
         self.num_nodes += 1
         self.coords.append(node.coordinates)
         self.node_list.append(node)
+
+    def removeLink(self,link):
+        link.removeFromNodes()
+        self.link_list.remove(link)
+        self.num_links -= 1
+        del[link]
+
+    def removeNode(self,node):
+        print("REMOVING {}: {}".format(node.label,node.coordinates))
+        self.num_nodes -= 1
+        self.coords.remove(node.coordinates)
+        posit = self.node_list.index(node)
+        for entry in self.node_list:
+            if entry.label > node.label:
+                entry.label -= 1
+        self.node_list.remove(node)
+        print("COORD CHANGE: {}".format(self.coords))
+        del[node]
 
 
     def buildGraph(self,angle_dict,node,node_limit,link_limit,direc_constr=[]):
@@ -68,7 +90,9 @@ class Graph():
             # of the current node. If getAngle fails to find any such angle it leaves angle
             # as none and sets direc to be the set of directions for which there are angles
             # yet unassigned
+            print("AVAILABLE HERE: {}".format(open_direc))
             angle,direc = getAngle(open_direc,direc_constr,angle_dict)
+            print("AND AFTER: {}".format(open_direc))
             #If angle is none then getAngle failed to find an angle that can be linked to
             # the node
             if angle is None:
@@ -99,16 +123,50 @@ class Graph():
             new_direcs.append(direc)
             #Create the angle being inserted this round
             link = Link(angle)
-            fail = True
+            fail = True #Fail is true if we fail to insert the link by the end of the round
             #Copy the coordinates of the current node that will be modified to be the 
-            # coordinates for the node the link will connect to 
-            new_coords = list(node_coords)
-            for i in range(2): new_coords[i] += link.change[i]
+            # coordinates for the node the link will connect to
+
+            node_exists = False #indicates if there is a preexisting node to link to
+            min_dist = -1 #initialise the minimal distance between nodes
+            #Index is the index of the non-zero entry in the link.change list
+            if math.fabs(link.change[0]) == 1:index = 0
+            else: index = 1
+
+            #We only consider nodes whose unchanged coord matches the current coord
+            # in the direction of the change
+            potentials = []
+            print("Beginning this fix")
+            x = None
+            for entry in self.node_list:
+                x = self.coords[self.node_list.index(entry)]
+                if x[1-index] == node_coords[1-index] and ((x[index] - node_coords[index])/\
+                        link.change[index])>0 and entry is not node:
+                    change = [x[i]-node_coords[i] for i in range(2)]
+                    if change == [1,0]: pot_direc = "right"
+                    elif change == [-1,0]: pot_direc = "left"
+                    elif change == [0,1]: pot_direc = "top"
+                    elif change == [0,-1]: pot_direc = "bottom"
+                    else:
+                        print("ROUNDING ERROR!! Terminating")
+                        print("{}\t{}\t{}".format(x,node_coords,change))
+                        exit(-1)
+                    if entry.directions[pot_direc] is None:
+                        potentials.append(self.coords[self.node_list.index(entry)])
+            #potentials = [x for x in self.coords if x[1-index] == node_coords[1-index] and\
+            #        ((x[index] - node_coords[index])/link.change[index])>0]
+            #Looking for the closest node to our current coordinate
+            for coord in potentials:
+                if min_dist == -1 or math.fabs(coord[index]-node_coords[index])<min_dist:
+                    min_dist = math.fabs(coord[index] - node_coords[index])
+                    min_coords = coord
+                    node_exists = True
+
             #There already exists a node in the graph with the same coordinates as the 
             # node the link will connect to
-            if new_coords in self.coords:
+            if node_exists:
                 #set the target node to the the corresponding entry in the list of nodes
-                new_node = self.node_list[self.coords.index(new_coords)]
+                new_node = self.node_list[self.coords.index(min_coords)]
                 #Identified target node is suitable for connection
                 # In this case we add link to graph, remove angle from available angles
                 # and remove direction from list of available directions on the node
@@ -125,6 +183,8 @@ class Graph():
                 #If a node with the same coordinates does not exist then the only
                 # option is to create a new node. To do this we must check that we
                 # are below the node limit
+                new_coords = list(node_coords)
+                for i in range(2): new_coords[i] += link.change[i]
                 if self.num_nodes<node_limit:
                     #Build a new node with the suitable coordinates
                     new_node = Node(new_coords[0],new_coords[1],self.num_nodes)
@@ -136,7 +196,7 @@ class Graph():
                     #Removre direction and angle from lists of consideration
                     angle_dict[direc].remove(angle)
                     open_direc.remove(direc)
-                    print("Created New Node: {}".format(direc))
+                    print("Created New Node: {}\t({})".format(direc, new_coords))
                     #We have not failed to create a new link
                     fail = False
                 #If the above does not trigger we have faile to make a link
@@ -156,6 +216,24 @@ class Graph():
                     complete = False
             if complete:
                 print("There's something wrong here")
+                print("REMAINING ANGLES: {}".format(angle_dict))
+                self.try_count += 1
+                expendable = [x for x in self.node_list if len([y for y in x.directions if x.directions[y] is not None])==1]
+                if expendable == [] or self.try_count>node_limit:
+                    print("Cannot make full graph")
+                    #exit(-1)
+                else:
+                    spare_node = random.choice(expendable)
+                    for entry in spare_node.directions:
+                        if spare_node.directions[entry] is not None:
+                            angle_dict[entry].append(spare_node.directions[entry].angle)
+                            self.removeLink(spare_node.directions[entry])
+                            break
+                    self.removeNode(spare_node)
+                    if spare_node is node:
+                        node = self.node_list[0]
+                    self.buildGraph(angle_dict,node,node_limit,link_limit)
+                    print("So this happened")
                 #exit(-1)
             else:
                 #Recursively try again building on the same node, but with the new constraints
@@ -195,6 +273,7 @@ class Link():
     def __init__(self,angle):
         #Link contains the angle as a label as well as references to nodes it links to
         self.angle = angle
+        self.length = None
         self.from_node = None
         self.to_node = None
 
@@ -213,6 +292,21 @@ class Link():
         node_to.directions[REVERSE_DICT[from_direc]] = self
         self.from_node = node_from
         self.to_node = node_to
+
+
+    def removeFromNodes(self):
+        for node in [self.from_node,self.to_node]:
+            for direc in node.directions:
+                if node.directions[direc] is self:
+                    node.directions[direc] = None
+                    break
+
+
+    def otherNode(self,node):
+        if node is self.from_node:
+            return self.to_node
+        else:
+            return self.from_node
 
 
 def getAngle(open_direc,direc_constr,angle_dict):
@@ -267,9 +361,9 @@ def angleTest(angles,num_junctions,num_roads):
 def probAngleSetter(num_angles,rnge):
     prob_angle_list = []
     for i in range(num_angles):
-        prob_angle_list.append(random.randint(rnge[0],rnge[1]))
-        #angle = random.randint(rnge[0],rnge[1])
-        #prob_angle_list.append(angle-angle%90)
+        #prob_angle_list.append(random.randint(rnge[0],rnge[1]))
+        angle = random.randint(rnge[0],rnge[1])
+        prob_angle_list.append(angle-angle%90)
     return prob_angle_list
 
 def randomiseAngles(count,num_junctions,ang_list):
@@ -289,7 +383,7 @@ def generateAngles(num_junctions,num_roads,spec_num_up):
 
     if spec_num_up is None:
         while num_up is None or num_up > 2*num_junctions:
-            num_up = random.randint(0,num_roads)
+            num_up = random.randint(0,2*num_junctions)
     else:
         num_up = spec_num_up
 
@@ -308,33 +402,109 @@ def generateAngles(num_junctions,num_roads,spec_num_up):
     return angles
 
 
-def constructSimulation(graph,num_cars,run_graphics):
+def setLinkLengths(link_list,len_range):
+    links = list(link_list)
+    prev_size = None
+    cur_size = len(links)
+    while prev_size is None or cur_size<prev_size:
+        for link in links:
+            if len([x for x in list(link.from_node.directions.values())\
+                    if x in links])==1:
+                link.length = random.randint(len_range[0],len_range[1])
+                links.remove(link)
+            elif len([x for x in list(link.to_node.directions.values())\
+                    if x in links])==1:
+                link.length = random.randint(len_range[0],len_range[1])
+                links.remove(link)
+        prev_size = cur_size
+        cur_size = len(links)
+    #All the links remaining in links do not exclusively attach to a 
+    # terminal link. Thus links now only contains links in loops
+    loop_list = None
+    direc_list = None
+    next_links = []
+    linger_list = [x for x in links if x.length is None]
+    while len(linger_list)>0:
+        link = linger_list[0]
+        cur_node = link.from_node
+        loop_list = []
+        direc_list = []
+        
+        while link not in loop_list:
+            loop_list.append(link)
+            direc_list.append(cur_node == link.from_node)
+            cur_node = link.otherNode(cur_node)
+            next_links = [x for x in list(cur_node.directions.values()) \
+                    if x in linger_list and x is not link]
+            link = random.choice(next_links)
+        
+        x_temp = 0
+        y_temp = 0
+        mod = 1
+        for i,entry in enumerate(loop_list[:-2]):
+            entry.length = random.randint(len_range[0],len_range[1])
+            if direc_list[i]: mod = 1
+            else: mod = -1
+            x_temp += mod*entry.length*math.cos(math.radians(entry.angle))
+            y_temp += mod*entry.length*math.sin(math.radians(entry.angle))
+        
+        [l1,l2] = loop_list[-2:]
+        a2 = math.radians(l2.angle)
+        a1 = math.radians(l1.angle)
+
+        if l1.length is None:
+            l1_temp = round((x_temp*math.cos(a2)-y_temp*math.sin(a2))/\
+                    math.sin(math.radians(l1.angle-l2.angle)),2)
+            #if not direc_list[-2]: l1.length = -l1_temp
+            #else: l1.length = l1_temp
+            l1.length = l1_temp
+
+        if l2.length is None:
+            l2.length = round((x_temp - l1_temp*math.sin(a1))/math.sin(a2),2)
+            #if not direc_list[-1]: l2.length*=-1
+
+        done = True
+        for entry in loop_list: 
+            if entry.length<len_range[0] or entry.length>len_range[1]:
+                done = False
+                break
+        for entry in loop_list: linger_list.remove(entry)
+
+    print("LENGTH RESULT: {}".format([x.length for x in link_list]))
+    return [x.length for x in link_list]
+
+
+def constructSimulation(graph,num_cars,link_len_range,run_graphics):
     num_junctions = len(graph.node_list)
     num_roads = len(graph.link_list)
 
     road_angles = [x.angle for x in graph.link_list]
     #NOTE: This is a temporary fix. When loops emerge this will not be good enough
-    road_lengths = [random.choice([25,100]) for _ in range(num_roads)]
+    #road_lengths = [random.randint(25,100) for _ in range(num_roads)]
+    road_lengths = setLinkLengths(graph.link_list,link_len_range)
 
     junc_pairs = []
     pre,post = None,None
     for link in graph.link_list:
         pre = link.from_node
         post = link.to_node
-        if pre.coordinates[0]<post.coordinates[0] or pre.coordinates[1]<pre.coordinates[1]:
-            junc_pairs.append((pre.label,post.label))
-        else:
+        if link.angle>135 and link.angle<315:
             junc_pairs.append((post.label,pre.label))
+        else:
+            junc_pairs.append((pre.label,post.label))
 
+    exit(-1)
     simulator.runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,\
                            junc_pairs,run_graphics)
 
-num_junctions = 6
-num_roads = 7
+num_junctions = 4
+num_roads = 4
 num_cars = 5
 run_graphics = True
 
-num_up = None
+link_len_range = [25,100]
+
+num_up = 2
 angles = None
 
 if angles is None or len(angles)!= num_roads or  angleTest(angles,num_junctions,num_roads)!=0:
@@ -352,4 +522,4 @@ for entry in sorted_angles:
 graph = Graph()
 graph.buildGraph(sorted_angles,graph.node_list[0],num_junctions,num_roads)
 graph.printStatus()
-constructSimulation(graph,num_cars,run_graphics)
+constructSimulation(graph,num_cars,link_len_range,run_graphics)

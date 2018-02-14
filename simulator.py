@@ -1,6 +1,5 @@
 import graphic_simulator
 import map_builder
-from optparse import OptionParser
 import random
 import time
 import vehicle_classes
@@ -35,7 +34,7 @@ def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None):
     #car_lanes is the parameter that specifies what lanes the cars should be put in
     # If car_lanes is None then no lanes have been specified so they will be assigned
     # at random.
-    car_lanes = listFixer(car_lanes,[num_cars,2],[0,0],[num_cars-1,1])
+    car_lanes = listFixer(car_lanes,[num_cars,2],[0,0],[len(roads)-1,1])
     car_speeds = listFixer(car_speeds,[num_cars,1],1,6)
 
     #Each entry in car_lanes is the address of a road, and a lane on that road where
@@ -52,12 +51,10 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
                   run_graphics,car_speeds=None,car_lanes=None):
 
     clock = 0
-    runtime = 5.5
+    runtime = 10.0
 
     junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,\
                                            road_lengths,junc_pairs)
-    car_speeds = None
-    car_lanes = None
     #car_speeds = [5.5,0]
     #car_lanes = [(0,1),(1,1)]
     cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes)
@@ -98,7 +95,7 @@ if __name__ == "__main__":
     #3-road intersection
     num_junctions = 4
     num_roads = 3
-    num_cars = 2
+    num_cars = 5
     
     road_angles = [180,0,50]
     road_lengths = [30,30,30]
