@@ -80,7 +80,14 @@ class Graph():
         open_direc = [x for x in node.directions if node.directions[x] is None]
         angle = None
         #The number of links that will be attempted to be created this round
-        num_links = random.randint(1,min(link_limit-self.num_links,len(open_direc)))
+        if min(link_limit-self.num_links,len(open_direc))>0:
+            num_links = random.randint(1,min(link_limit-self.num_links,len(open_direc)))
+        else:
+            #In the case there are no more links to add randint passes an error so handle
+            # separately. Also since num_links = 0 then you never enter the for loop
+            # where false is initialised, so intialise here to allow exit from the loop
+            num_links = 0
+            fail = False
         if self.debug:
             print("LABEL: {}\tAVAIL: {}".format(node.label,open_direc))
             print("CONSTRAINTS: {}".format(direc_constr))
@@ -392,17 +399,19 @@ def angleTest(angles,num_junctions,num_roads):
     return 0
 
 
-def probAngleSetter(num_angles,rnge):
+def probAngleSetter(num_angles,rnge,debug):
     prob_angle_list = []
+    angle = None
     for i in range(num_angles):
-        #prob_angle_list.append(random.randint(rnge[0],rnge[1]))
         angle = random.randint(rnge[0],rnge[1])
-        if angle in range(46,135): angle = 90
-        elif angle in range(135,226): angle = 180
-        elif angle in range(226,315): angle = 270
-        else: angle = 0
+        if debug:
+            if angle in range(46,135): angle = 90
+            elif angle in range(135,226): angle = 180
+            elif angle in range(226,315): angle = 270
+            else: angle = 0
         prob_angle_list.append(angle)
     return prob_angle_list
+
 
 def randomiseAngles(count,num_junctions,ang_list):
     randomiser = None
@@ -414,7 +423,7 @@ def randomiseAngles(count,num_junctions,ang_list):
     return ang_list,count
 
 
-def generateAngles(num_junctions,num_roads,spec_num_up):
+def generateAngles(num_junctions,num_roads,spec_num_up,debug):
     num_up = None
     angles = []
     count = None
@@ -425,8 +434,8 @@ def generateAngles(num_junctions,num_roads,spec_num_up):
     else:
         num_up = spec_num_up
 
-    up_angles = [x for x in probAngleSetter(num_up,(46,135))]
-    left_angles = [x for x in probAngleSetter(num_roads-num_up,(135,226))]
+    up_angles = [x for x in probAngleSetter(num_up,(46,135),debug)]
+    left_angles = [x for x in probAngleSetter(num_roads-num_up,(135,226),debug)]
 
     for ang_list in [up_angles,left_angles]:
         count = 0
@@ -440,39 +449,71 @@ def generateAngles(num_junctions,num_roads,spec_num_up):
     return angles
 
 
-def setLinkLengths(link_list,len_range):
+def assignEndLinkLengths(links,len_range):
+    for link in links:
+        if len([x for x in list(link.from_node.directions.values())\
+                if x in links])==1:
+            link.length = random.randint(len_range[0],len_range[1])
+            links.remove(link)
+        elif len([x for x in list(link.to_node.directions.values())\
+                if x in links])==1:
+            link.length = random.randint(len_range[0],len_range[1])
+            links.remove(link)
+    return links
+
+
+def dist(coord1,coord2):
+    dist = 0
+    for i in range(len(coord1)):
+        dist+=(coord2[i]-coord1[i])**2
+    return math.sqrt(dist)
+
+
+def setScaling(scale_list,len_range):
+    scale = list(set(scale_list))
+    scale_list = [x/scale[-1] for x in scale_list]
+    scale = [x/scale[-1] for x in scale]
+    new_scale_list = []
+    pos,lo_bound,up_bound = None,None,None
+    for entry in scale_list:
+        pos = scale.index(entry)
+        lo_bound = min(len_range[0],len_range[1]*scale[pos-1])
+        up_bound = scale[pos]*len_range[1]
+        new_scale_list.append((lo_bound,up_bound))
+    return new_scale_list
+
+
+def setLinkLengths(link_list,len_range,debug):
     links = list(link_list)
     prev_size = None
     cur_size = len(links)
     while prev_size is None or cur_size<prev_size:
-        for link in links:
-            if len([x for x in list(link.from_node.directions.values())\
-                    if x in links])==1:
-                link.length = random.randint(len_range[0],len_range[1])
-                links.remove(link)
-            elif len([x for x in list(link.to_node.directions.values())\
-                    if x in links])==1:
-                link.length = random.randint(len_range[0],len_range[1])
-                links.remove(link)
+        links = assignEndLinkLengths(links,len_range)
         prev_size = cur_size
         cur_size = len(links)
     #All the links remaining in links do not exclusively attach to a 
     # terminal link. Thus links now only contains links in loops
     linger_index = 0
-    loop_list = None
-    mod_list = None
+    repeat = True
+    temp_pos = None
+    loop_list,mod_list,scale_list = None,None,None
     next_links = []
     linger_list = [x for x in links if x.length is None]
-    print("The links that have lingered: {}".format([(x.from_node.label,x.to_node.label) for x in linger_list]))
+    if debug:
+        print("The links that have lingered: {}".format([(x.from_node.label,x.to_node.label) for x in linger_list]))
     while len(linger_list)>0 and linger_index >= 0:
         link = linger_list[linger_index]
         cur_node = link.from_node
         loop_list = []
         mod_list = []
+        scale_list = []
 
         while link not in loop_list:
             loop_list.append(link)
             mod_list.append(-1+2*(cur_node == link.from_node)) #If true mod is 1, else is -1
+            scale_list.append(dist(link.from_node.coordinates,link.to_node.coordinates))
+            if debug:
+                print("LINK:{}-{}\tMOD: {}".format(link.from_node.label,link.to_node.label,mod_list[-1]))
             cur_node = link.otherNode(cur_node)
             next_links = [x for x in list(cur_node.directions.values()) if x in linger_list\
                     and x is not link]
@@ -490,28 +531,36 @@ def setLinkLengths(link_list,len_range):
             link = min_link
         #The loop broke because we found a repeat => loop
         #This ensures only elements in the loop are considered
-        loop_list = loop_list[loop_list.index(link):]
-        print("This is a loop: {}".format([(x.from_node.label,x.to_node.label) for x in loop_list]))
+        temp_pos = loop_list.index(link)
+        mod_list = mod_list[temp_pos:] #Change mod_list first since afterwards link will not be in same place
+        loop_list = loop_list[temp_pos:]
+        scale_list = scale_list[temp_pos:]
+        if debug:
+            print("This is a loop: {}".format([((x.from_node.label,x.to_node.label),mod_list[i]) for i,x in enumerate(loop_list)]))
         while loop_list[-1].angle%180 == loop_list[-2].angle%180:
             loop_list = [loop_list[-1]] + loop_list[:-1]
             mod_list = [mod_list[-1]] + mod_list[:-1]
-        #temp_list = [x.length is not None for x in loop_list]
-        #if True in temp_list: 
-        #    loop_list = loop_list[temp_list.index(True):]+list(loop_list[:temp_list.index(True)])
-        #    mod_list = mod_list[temp_list.index(True):]+list(mod_list[:temp_list.index(True)])
-        print("This is Loop_List Now: {}".format([(x.from_node.label,x.to_node.label) for x in loop_list]))
+            scale_list = [scale_list[-1]] + scale_list[:-1]
+        temp_list = [x.length is not None for x in loop_list]
+        if True in temp_list:
+            temp_pos = temp_list.index(True)
+            loop_list = loop_list[temp_pos:]+list(loop_list[:temp_pos])
+            mod_list = mod_list[temp_pos:]+list(mod_list[:temp_pos])
+            scale_list = scale_list[temp_pos:]+list(scale_list[:temp_pos])
+        if debug:
+            print("This is Loop_List Now: {}".format([((x.from_node.label,x.to_node.label),mod_list[i]) for i,x in enumerate(loop_list)]))
+        scale_list = setScaling(scale_list,len_range)
         horiz_sum = 0
         vert_sum = 0
-        pos = 0
-        while pos<len(loop_list) and loop_list[pos].length is not None: pos+=1
-        print("\n\nENTER LENGTH ASSIGNMENT TEST")
-        print("This is pos: {}".format(pos))
-        for i,entry in enumerate(loop_list[pos:-2]):
-            entry.length = random.randint(len_range[0],len_range[1])
-            print("RAND ASSIGN: ({})-({})\tANG:{}\tLEN:{}\tMOD:{}".format(entry.from_node.label,entry.to_node.label,entry.angle,entry.length,mod_list[i]))
+        if debug:
+            print("\n\nENTER LENGTH ASSIGNMENT TEST")
+        for i,entry in enumerate(loop_list[:-2]):
+            if entry.length is None:
+                entry.length = random.randint(scale_list[i][0],scale_list[i][1])
             horiz_sum += mod_list[i]*entry.length*math.cos(math.radians(entry.angle))
             vert_sum += mod_list[i]*entry.length*math.sin(math.radians(entry.angle))
-        print("X: {}\tY: {}\n".format(horiz_sum,vert_sum))
+        if debug:
+            print("X: {}\tY: {}\n".format(horiz_sum,vert_sum))
 
         [l2,l1] = loop_list[-2:]
         a2 = math.radians(l2.angle)
@@ -520,42 +569,34 @@ def setLinkLengths(link_list,len_range):
         if l2.length is None:
             l2.length = (horiz_sum*math.sin(a1)-vert_sum*math.cos(a1))/\
                      mod_list[-2]*(math.sin(math.radians(l2.angle-l1.angle)))
-            print("HSUM: {}\tVSUM: {}\tA1: {}\tNUM: {}\tDENOM: {}".format(horiz_sum,vert_sum,a1,horiz_sum*math.sin(a1)-vert_sum*math.cos(a1),\
-                    mod_list[-2]*(math.sin(math.radians(l2.angle-l1.angle)))))
-            print("L2({})-({})\tANG:{}\tLEN:{}\tMOD:{}".format(l2.from_node.label,l2.to_node.label,l2.angle,l2.length,mod_list[-2]))
 
         if l1.length is None:
             if l1.angle%180 != 0:
-                print("DOING SIN")
                 l1.length = (-vert_sum-mod_list[-2]*l2.length*math.sin(a2))/mod_list[-1]*(math.sin(a1))
             else:
-                print("DOING COS")
                 l1.length = (-horiz_sum-mod_list[-2]*l2.length*math.cos(a2))/mod_list[-1]*(math.cos(a1))
-            print("L1({})-({})\tANG:{}\tLEN:{}\tMOD:{}".format(l1.from_node.label,l1.to_node.label,l1.angle,l1.length,mod_list[-1]))
 
-        #done = True
-        #for entry in loop_list: 
-        #    if entry.length<len_range[0] or entry.length>len_range[1]:
-        #        done = False
-        #        break
         linger_index = -1
         for i,entry in enumerate(linger_list):
-            print("{}-{}\t{}".format(entry.from_node.label,entry.to_node.label,entry.length))
+            if debug:
+                print("{}-{}\t{}".format(entry.from_node.label,entry.to_node.label,entry.length))
             if entry.length is None: linger_index = i
-        print("\n")
+        if debug:
+            print("\n")
 
-    print("LENGTH RESULT: {}".format([((x.from_node.label,x.to_node.label),x.length) for x in link_list]))
+    if debug:
+        print("LENGTH RESULT: {}".format([((x.from_node.label,x.to_node.label),x.length) for x in link_list]))
     return [round(x.length,2) for x in link_list]
 
 
-def constructSimulation(graph,num_cars,link_len_range,run_graphics):
+def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug):
     num_junctions = len(graph.node_list)
     num_roads = len(graph.link_list)
 
     road_angles = [x.angle for x in graph.link_list]
     #NOTE: This is a temporary fix. When loops emerge this will not be good enough
     #road_lengths = [random.randint(25,100) for _ in range(num_roads)]
-    road_lengths = setLinkLengths(graph.link_list,link_len_range)
+    road_lengths = setLinkLengths(graph.link_list,link_len_range,debug)
 
     junc_pairs = []
     pre,post = None,None
@@ -567,26 +608,29 @@ def constructSimulation(graph,num_cars,link_len_range,run_graphics):
         else:
             junc_pairs.append((pre.label,post.label))
 
-    exit(-1)
-    simulator.runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,\
-                           junc_pairs,run_graphics)
+    if not debug:
+        simulator.runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,\
+                               junc_pairs,run_graphics)
 
-num_junctions = 10
-num_roads = 13
+num_junctions = 13
+num_roads = 10
 num_cars = 5
 run_graphics = True
-debug = False
+
+debug_angle = True
+debug_graph = False
+debug_construction = False
 
 link_len_range = [25,100]
 
-num_up = 7
+num_up = None
 angles = None
 
 if angles is None or len(angles)!= num_roads or  angleTest(angles,num_junctions,num_roads)!=0:
-    angles = generateAngles(num_junctions,num_roads,num_up)
+    angles = generateAngles(num_junctions,num_roads,num_up,(debug_angle or debug_construction))
 
 sorted_angles = partitionAngles(angles)
-if debug: print("SORTED: {}".format(sorted_angles))
+if debug_angle: print("SORTED: {}".format(sorted_angles))
 temp = None
 for entry in sorted_angles:
     while len(sorted_angles[entry])>num_junctions:
@@ -594,7 +638,7 @@ for entry in sorted_angles:
         sorted_angles[entry].remove(temp)
         sorted_angles[REVERSE_DICT[entry]].append(temp)
 
-graph = Graph(debug)
+graph = Graph(debug_graph)
 graph.buildGraph(sorted_angles,graph.node_list[0],num_junctions,num_roads)
 graph.printStatus()
-constructSimulation(graph,num_cars,link_len_range,run_graphics)
+constructSimulation(graph,num_cars,link_len_range,run_graphics,debug_construction)
