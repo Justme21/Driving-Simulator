@@ -18,7 +18,7 @@ class Graph():
         self.num_links = 0
         #The number of nodes in the graph
         self.num_nodes = 1
-        
+
         #Number of times it has been attempted to fix an incomplete graph
         self.try_count = 0
 
@@ -495,7 +495,9 @@ def setLinkLengths(link_list,len_range,debug):
     # terminal link. Thus links now only contains links in loops
     linger_index = 0
     repeat = True
+    cemented = False
     temp_pos = None
+    len_list = None
     loop_list,mod_list,scale_list = None,None,None
     next_links = []
     linger_list = [x for x in links if x.length is None]
@@ -550,31 +552,62 @@ def setLinkLengths(link_list,len_range,debug):
         if debug:
             print("This is Loop_List Now: {}".format([((x.from_node.label,x.to_node.label),mod_list[i]) for i,x in enumerate(loop_list)]))
         scale_list = setScaling(scale_list,len_range)
-        horiz_sum = 0
-        vert_sum = 0
-        if debug:
-            print("\n\nENTER LENGTH ASSIGNMENT TEST")
-        for i,entry in enumerate(loop_list[:-2]):
-            if entry.length is None:
-                entry.length = random.randint(scale_list[i][0],scale_list[i][1])
-            horiz_sum += mod_list[i]*entry.length*math.cos(math.radians(entry.angle))
-            vert_sum += mod_list[i]*entry.length*math.sin(math.radians(entry.angle))
-        if debug:
-            print("X: {}\tY: {}\n".format(horiz_sum,vert_sum))
+        cemented = False
+        while not cemented:
+            len_list = [x.length for x in loop_list]
+            horiz_sum = 0
+            vert_sum = 0
+            ang = 0
+            if debug:
+                print("\n\nENTER LENGTH ASSIGNMENT TEST")
+            for i,entry in enumerate(loop_list[:-2]):
+                ang = entry.angle
+                if mod_list[i] == -1: ang = (ang+180)%360
+                if len_list[i] is None:
+                    len_list[i] = random.randint(scale_list[i][0],scale_list[i][1])
+                horiz_sum += len_list[i]*math.cos(math.radians(ang))
+                vert_sum += len_list[i]*math.sin(math.radians(ang))
+            if debug:
+                print("X: {}\tY: {}\n".format(horiz_sum,vert_sum))
 
-        [l2,l1] = loop_list[-2:]
-        a2 = math.radians(l2.angle)
-        a1 = math.radians(l1.angle)
+            [l2,l1] = loop_list[-2:]
+            a2 = (l2.angle+(mod_list[-2]==-1)*180)%360
+            a1 = (l1.angle+(mod_list[-1]==-1)*180)%360
+            a2_rad = math.radians(a2)
+            a1_rad = math.radians(a1)
 
-        if l2.length is None:
-            l2.length = (horiz_sum*math.sin(a1)-vert_sum*math.cos(a1))/\
-                     mod_list[-2]*(math.sin(math.radians(l2.angle-l1.angle)))
+            if l2.length is None:
+                len_list[-2] = (horiz_sum*math.sin(a1_rad)-vert_sum*math.cos(a1_rad))/\
+                         (math.sin(math.radians(a2-a1)))
 
-        if l1.length is None:
-            if l1.angle%180 != 0:
-                l1.length = (-vert_sum-mod_list[-2]*l2.length*math.sin(a2))/mod_list[-1]*(math.sin(a1))
-            else:
-                l1.length = (-horiz_sum-mod_list[-2]*l2.length*math.cos(a2))/mod_list[-1]*(math.cos(a1))
+            if len_list[-1] is None:
+                if l1.angle%180 != 0:
+                    len_list[-1] = (-vert_sum-len_list[-2]*math.sin(a2_rad))/(math.sin(a1_rad))
+                else:
+                    len_list[-1] = (-horiz_sum-len_list[-2]*math.cos(a2_rad))/(math.cos(a1_rad))
+
+            if debug:
+                test_sum_cos  = 0
+                test_sum_sin  = 0
+                printout_cos = ""
+                printout_sin = ""
+                linkprintout = ""
+                for i in range(len(loop_list)):
+                    printout_cos += "({}*{}*{})+".format(mod_list[i],len_list[i],math.cos(math.radians(loop_list[i].angle)))
+                    printout_sin += "({}*{}*{})+".format(mod_list[i],len_list[i],math.sin(math.radians(loop_list[i].angle)))
+                    linkprintout += "({}-{})+".format(loop_list[i].from_node.label,loop_list[i].to_node.label)
+                    test_sum_cos += mod_list[i]*len_list[i]*math.cos(math.radians(loop_list[i].angle))
+                    test_sum_sin += mod_list[i]*len_list[i]*math.sin(math.radians(loop_list[i].angle))
+
+                print("TESTING OUTPUT")
+                print("{}\n{}\nTOTAL; SIN: {}\n{}\nTOTAL;COS: {}".format(linkprintout[:-1],printout_sin[:-1],test_sum_sin,printout_cos[:-1],test_sum_cos))
+
+            if True in [x<0 for x in len_list]:
+                print("DISREGARD ABOVE")
+            else: cemented = True
+
+        for i,entry in enumerate(loop_list):
+            entry.length = len_list[i]
 
         linger_index = -1
         for i,entry in enumerate(linger_list):
@@ -586,7 +619,7 @@ def setLinkLengths(link_list,len_range,debug):
 
     if debug:
         print("LENGTH RESULT: {}".format([((x.from_node.label,x.to_node.label),x.length) for x in link_list]))
-    return [round(x.length,2) for x in link_list]
+    return [round(x.length,5) for x in link_list]
 
 
 def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug):
@@ -603,31 +636,33 @@ def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug):
     for link in graph.link_list:
         pre = link.from_node
         post = link.to_node
-        if link.angle>135 and link.angle<315:
+        if link.angle>90 and link.angle<=270:
             junc_pairs.append((post.label,pre.label))
+            link.angle-=180
         else:
             junc_pairs.append((pre.label,post.label))
-
+        print("{}-{}\t{}\t{}".format(link.from_node.label,link.to_node.label,junc_pairs[-1],link.length))
+    
     if not debug:
         simulator.runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,\
                                junc_pairs,run_graphics)
 
-num_junctions = 13
-num_roads = 10
-num_cars = 5
+num_junctions = 6
+num_roads = 6
+num_cars = 1
 run_graphics = True
 
-debug_angle = True
+debug_angle = False
 debug_graph = False
 debug_construction = False
 
 link_len_range = [25,100]
 
-num_up = None
+num_up = 4
 angles = None
 
 if angles is None or len(angles)!= num_roads or  angleTest(angles,num_junctions,num_roads)!=0:
-    angles = generateAngles(num_junctions,num_roads,num_up,(debug_angle or debug_construction))
+    angles = generateAngles(num_junctions,num_roads,num_up,debug_angle)
 
 sorted_angles = partitionAngles(angles)
 if debug_angle: print("SORTED: {}".format(sorted_angles))

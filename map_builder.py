@@ -38,9 +38,9 @@ def printContents(junction,mod="",prev_lanes=[]):
     junction.printStatus(mod)
 
     for entry in junction.out_lanes:
-        if entry.label not in prev_lanes:
+        if entry.label[:-1] not in prev_lanes:
             entry.printStatus(mod)
-            prev_lanes.append(entry.label)
+            prev_lanes.append(entry.label[:-1])
             printContents(entry.to_junction,mod+"\t",prev_lanes)
 
 

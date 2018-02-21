@@ -53,11 +53,14 @@ class Junction():
 
         cur_coords = self.four_corners[corner]
 
+        print("({})\tCUR: {}\tNEW:{}".format(self.label,cur_coords,coords))
+
         #Once the wave of updates reaches a junction that is already in the correct
         # position it stops.This is, arguably, sloppy craftsmanship, but it works.
         # C'est la vie  
-        if cur_coords is None or round(cur_coords[0],2) != round(coords[0],2) or \
-           round(cur_coords[1],2) != round(coords[1],2):
+        if cur_coords is None or math.sqrt((cur_coords[0]-coords[0])**2+(cur_coords[1]-coords[1])**2)>10:
+        #if cur_coords is None or round(cur_coords[0],2) != round(coords[0],2) or \
+        #   round(cur_coords[1],2) != round(coords[1],2):
             #Unset four_corners
             for x in self.four_corners: self.four_corners[x] = None
             setFourCorners(self,corner,coords)
@@ -183,8 +186,10 @@ class Road():
         else: next_junc = self.top_up_lane.to_junction        
 
         cur_coord = self.four_corners[corner]
-        if cur_coord is None or (round(cur_coord[0],2) != round(coords[0],2)) or\
-           (round(cur_coord[1],2) != round(coords[1],2)):
+        print("({})\tCUR: {}\tNEW:{}".format(self.label,cur_coord,coords))
+        if cur_coord is None or math.sqrt((cur_coord[0]-coords[0])**2 + (cur_coord[1]-coords[1])**2)>10:
+        #if cur_coord is None or (round(cur_coord[0],2) != round(coords[0],2)) or\
+        #   (round(cur_coord[1],2) != round(coords[1],2)):
             setFourCorners(self,corner,coords)
         
             #Used to determine the parameters to be passed to the next junction update   
