@@ -494,6 +494,8 @@ def setLinkLengths(link_list,len_range,debug):
     #All the links remaining in links do not exclusively attach to a 
     # terminal link. Thus links now only contains links in loops
     linger_index = 0
+    try_count = 0
+    try_limit = 5
     repeat = True
     cemented = False
     temp_pos = None
@@ -504,6 +506,7 @@ def setLinkLengths(link_list,len_range,debug):
     if debug:
         print("The links that have lingered: {}".format([(x.from_node.label,x.to_node.label) for x in linger_list]))
     while len(linger_list)>0 and linger_index >= 0:
+        try_count = 0
         link = linger_list[linger_index]
         cur_node = link.from_node
         loop_list = []
@@ -553,7 +556,7 @@ def setLinkLengths(link_list,len_range,debug):
             print("This is Loop_List Now: {}".format([((x.from_node.label,x.to_node.label),mod_list[i]) for i,x in enumerate(loop_list)]))
         scale_list = setScaling(scale_list,len_range)
         cemented = False
-        while not cemented:
+        while not cemented and try_count<try_limit:
             len_list = [x.length for x in loop_list]
             horiz_sum = 0
             vert_sum = 0
@@ -603,33 +606,40 @@ def setLinkLengths(link_list,len_range,debug):
                 print("{}\n{}\nTOTAL; SIN: {}\n{}\nTOTAL;COS: {}".format(linkprintout[:-1],printout_sin[:-1],test_sum_sin,printout_cos[:-1],test_sum_cos))
 
             if True in [x<0 for x in len_list]:
-                print("DISREGARD ABOVE")
+                if debug: print("DISREGARD ABOVE")
+                try_count += 1
             else: cemented = True
 
-        for i,entry in enumerate(loop_list):
-            entry.length = len_list[i]
+        if try_count<try_limit:
+            for i,entry in enumerate(loop_list):
+                entry.length = len_list[i]
 
-        linger_index = -1
-        for i,entry in enumerate(linger_list):
+            linger_index = -1
+            for i,entry in enumerate(linger_list):
+                if debug:
+                    print("{}-{}\t{}".format(entry.from_node.label,entry.to_node.label,entry.length))
+                if entry.length is None: linger_index = i
             if debug:
-                print("{}-{}\t{}".format(entry.from_node.label,entry.to_node.label,entry.length))
-            if entry.length is None: linger_index = i
-        if debug:
-            print("\n")
+                print("\n")
+
+        else:
+            for entry in linger_list:
+                entry.length = None
+            linger_index = 0
 
     if debug:
         print("LENGTH RESULT: {}".format([((x.from_node.label,x.to_node.label),x.length) for x in link_list]))
     return [round(x.length,5) for x in link_list]
 
 
-def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug):
+def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug_construct,debug_sim):
     num_junctions = len(graph.node_list)
     num_roads = len(graph.link_list)
 
     road_angles = [x.angle for x in graph.link_list]
     #NOTE: This is a temporary fix. When loops emerge this will not be good enough
     #road_lengths = [random.randint(25,100) for _ in range(num_roads)]
-    road_lengths = setLinkLengths(graph.link_list,link_len_range,debug)
+    road_lengths = setLinkLengths(graph.link_list,link_len_range,debug_construct)
 
     junc_pairs = []
     pre,post = None,None
@@ -643,22 +653,23 @@ def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug):
             junc_pairs.append((pre.label,post.label))
         print("{}-{}\t{}\t{}".format(link.from_node.label,link.to_node.label,junc_pairs[-1],link.length))
     
-    if not debug:
+    if not debug_construct:
         simulator.runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,\
-                               junc_pairs,run_graphics)
+                               junc_pairs,run_graphics,debug_sim)
 
-num_junctions = 6
-num_roads = 6
-num_cars = 1
+num_junctions = 10
+num_roads = 13
+num_cars = 5
 run_graphics = True
 
-debug_angle = False
+debug_angle = True
 debug_graph = False
-debug_construction = False
+debug_construction = True
+debug_simulation = False
 
 link_len_range = [25,100]
 
-num_up = 4
+num_up = 7
 angles = None
 
 if angles is None or len(angles)!= num_roads or  angleTest(angles,num_junctions,num_roads)!=0:
@@ -676,4 +687,4 @@ for entry in sorted_angles:
 graph = Graph(debug_graph)
 graph.buildGraph(sorted_angles,graph.node_list[0],num_junctions,num_roads)
 graph.printStatus()
-constructSimulation(graph,num_cars,link_len_range,run_graphics,debug_construction)
+constructSimulation(graph,num_cars,link_len_range,run_graphics,debug_construction,debug_simulation)
