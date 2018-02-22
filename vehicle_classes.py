@@ -8,7 +8,7 @@ car_length = 4.17
 car_width = 1.7
 
 class Car():
-    def __init__(self,road,is_top_lane,v,label,timestep=.1):
+    def __init__(self,road,is_top_lane,v,label,debug,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -36,6 +36,7 @@ class Car():
 
         #The processing speed of the car (how often it changes it's action)
         self.timestep = timestep
+        self.debug = debug
         
         #Sense Variables
         self.on_road = True #Check if car still on road
@@ -118,10 +119,11 @@ class Car():
         self.x_com = round(lane_x+disp[0],2)
 
         #NOTE" DEBUGGING
-        print("TEST BEGIN")
-        print("LANE: ({},{})\tDIREC: {}\tCAR: ({},{})\tDISP: ({},{}))".format(\
-               lane_x,lane_y,direction,self.x_com,self.y_com,disp[0],disp[1]))
-        print("TEST END")
+        if self.debug:
+            print("TEST BEGIN")
+            print("LANE: ({},{})\tDIREC: {}\tCAR: ({},{})\tDISP: ({},{}))".format(\
+                   lane_x,lane_y,direction,self.x_com,self.y_com,disp[0],disp[1]))
+            print("TEST END")
 
         #The coordinates of each corner of the car
         self.setFourCorners()
@@ -193,15 +195,17 @@ class Car():
                 #If we are on a junction we only check to see if we are on a 
                 # lane whose angle is sufficiently similar to our own (within 45 degrees).
                 # It might be better to test for distance, but it feels unnecessary.
-                print("Testing Candidates in Junction {}".format(obj.label))
+                if self.debug: print("Testing Candidates in Junction {}".format(obj.label))
                 for lane in obj.in_lanes:
-                    print("IN: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(obj.label,\
-                           self.heading,lane.direction,(lane.direction+180)%360))
+                    if self.debug:
+                        print("IN: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(obj.label,\
+                            self.heading,lane.direction,(lane.direction+180)%360))
                     if math.fabs(((lane.direction+180)%360)-self.heading)<45:
                         candidates.append(lane)
                 for lane in obj.out_lanes:
-                    print("OUT: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(obj.label,\
-                           self.heading,(lane.direction+180)%360,lane.direction))
+                    if self.debug:
+                        print("OUT: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(obj.label,\
+                               self.heading,(lane.direction+180)%360,lane.direction))
                     if math.fabs(lane.direction-self.heading)<45:
                         candidates.append(lane)
 
@@ -212,7 +216,8 @@ class Car():
         """Given a list of candidates it tests to see if self in on any of them.
            If there is evidence that self is on a candidate it is put on self.on"""
         for entry in candidates:
-            print("Testing Candidate {}".format(entry.label))
+            if self.debug:
+                print("Testing Candidate {}".format(entry.label))
             if checkOn(self,entry):
                 self.putOn(entry)
 
@@ -223,7 +228,8 @@ class Car():
         left_right = None
         top_bottom = None
         for obj in list(self.on):
-            print("Checking if off {}".format(obj.label))
+            if self.debug:
+                print("Checking if off {}".format(obj.label))
             if not checkOn(self,obj):
                 self.takeOff(obj)
 
@@ -259,12 +265,12 @@ class Car():
            object."""
 
         #First check if you are moving onto a new road section
-        print("Checking On Anything New")
+        if self.debug: print("Checking On Anything New")
         on_candidates = self.checkNewOn()
-        print("Done Checking On")
+        if self.debug: print("Done Checking On")
         self.checkNewOff()
         self.testCandidates(on_candidates)
-        print("Done Checking Off")
+        if self.debug: print("Done Checking Off")
         crashed,crash_list = self.checkForCrash()
         if crashed:
             print("Oh MY GOSH A CRASH!")
@@ -308,10 +314,11 @@ def checkOn(car, obj):
            left_right += 1
 
 
-    print("{}: TB:{}\t LR:{}".format(obj.label,top_bottom,left_right))
-    car.printStatus()
-    obj.printStatus()
-    print("\n")
+    if car.debug:
+        print("{}: TB:{}\t LR:{}".format(obj.label,top_bottom,left_right))
+        car.printStatus()
+        obj.printStatus()
+        print("\n")
     if max(top_bottom,left_right)==4 and min(top_bottom,left_right)>=2:
         return True
     else:

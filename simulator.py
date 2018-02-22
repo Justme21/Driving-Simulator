@@ -25,7 +25,7 @@ def listFixer(target_list,good_dim,bound_low,bound_high):
     return target_list
 
 
-def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None):
+def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None,debug=True):
     """Constructs the car objects and assigns them coordinates that puts them on either
        specified lanes or else randomly chooses lanes to put them on."""
     cars = []
@@ -43,12 +43,12 @@ def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None):
     # the lane.
     for i,entry in enumerate(car_lanes):
         cars.append(vehicle_classes.Car(roads[car_lanes[i][0]],car_lanes[i][1],\
-                    car_speeds[i],i))
+                    car_speeds[i],i,debug))
     return cars
 
 
 def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  run_graphics,car_speeds=None,car_lanes=None):
+                  run_graphics,debug,car_speeds=None,car_lanes=None):
 
     clock = 0
     runtime = 10.0
@@ -57,22 +57,24 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
                                            road_lengths,junc_pairs)
     #car_speeds = [5.5,0]
     #car_lanes = [(0,1),(1,1)]
-    cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes)
+    cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes,debug)
 
     if run_graphics:
         g_sim = graphic_simulator.GraphicSimulator(junctions,roads,cars)
 
-    map_builder.printContents(junctions[0])
-    print("\n")
+    if debug:
+        map_builder.printContents(junctions[0])
+        print("\n")
     t0 = time.time()
     while(clock<runtime):
-        print("TIME: {}".format(clock))
+        if debug: print("TIME: {}".format(clock))
         for entry in cars:
             entry.move(0,0)
             entry.sense()
-            print("\nEnd Of Round Status Update:")
-            entry.printStatus()
-            print("\n")
+            if debug:
+                print("\nEnd Of Round Status Update:")
+                entry.printStatus()
+                print("\n")
         if run_graphics:
             g_sim.update()
     
@@ -106,5 +108,6 @@ if __name__ == "__main__":
     car_lanes = [(0,1),(1,1)]
 
     run_graphics = True
+    debug = False
     runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  run_graphics)
+                  run_graphics,debug)

@@ -42,7 +42,7 @@ class Junction():
         self.label = "J{}".format(label)
 
 
-    def updateCoords(self,corner,coords,in_road=None):
+    def updateCoords(self,coords,in_road=None):
         """Updates the location of the four corners of the junction such that the
            specified corner (corner) has the set coordinates (coords).
            If the update was called from a road then in_road is a reference to that road
@@ -51,52 +51,29 @@ class Junction():
            In map_builder it is an update to a junction that begins the process of 
            anchoring the graph in map_builder.construct_physical_overlay."""
 
-        cur_coords = self.four_corners[corner]
-
-        print("({})\tCUR: {}\tNEW:{}".format(self.label,cur_coords,coords))
+        if None in list(self.four_corners.values()):
+            cur_coords = None
+        else:
+            cur_coords = [(self.four_corners["front_left"][0]+self.four_corners["front_right"][0])/2,\
+                    (self.four_corners["front_left"][1]+self.four_corners["back_left"][1])/2]
 
         #Once the wave of updates reaches a junction that is already in the correct
         # position it stops.This is, arguably, sloppy craftsmanship, but it works.
         # C'est la vie  
-        if cur_coords is None or math.sqrt((cur_coords[0]-coords[0])**2+(cur_coords[1]-coords[1])**2)>10:
+        if cur_coords is None or math.sqrt((cur_coords[0]-coords[0])**2+(cur_coords[1]-coords[1])**2)>2:
         #if cur_coords is None or round(cur_coords[0],2) != round(coords[0],2) or \
         #   round(cur_coords[1],2) != round(coords[1],2):
             #Unset four_corners
             for x in self.four_corners: self.four_corners[x] = None
-            setFourCorners(self,corner,coords)
-            
+            setFourCorners(self,"front_left",[coords[0]-self.width/2,coords[1]-self.length/2])
+
             #Propogate update wave
             for lane in self.out_lanes:
                 road = lane.road
                 #Don't propogate update wave to road that we know just updated
                 #This reasoning ONLY WORKS if self.direction=90
                 if road is not in_road:
-                    if lane.direction in range(0,46):
-                        road.updateCoords("back_right",self.four_corners["back_right"],\
-                                           self)
-                    elif lane.direction in range(46,91):
-                        road.updateCoords("back_left",self.four_corners["front_left"]\
-                                          ,self)
-                    #NOTE: Over 90 degrees and <= 270 the road direction is opposite
-                    #      the lane direction
-                    elif lane.direction in range(91,135):
-                        road.updateCoords("front_left",self.four_corners["front_right"]\
-                                          ,self)
-                    elif lane.direction in range(135,180):
-                        road.updateCoords("front_right",self.four_corners["back_left"]\
-                                          ,self)
-                    elif lane.direction in range(180,226):
-                        road.updateCoords("front_left",self.four_corners["front_left"]\
-                                          ,self)
-                    elif lane.direction in range(226,271):
-                        road.updateCoords("front_right",self.four_corners["back_right"]\
-                                          ,self)
-                    elif lane.direction in range(271,315):
-                        road.updateCoords("back_right",self.four_corners["back_left"]\
-                                          ,self)
-                    else:
-                        road.updateCoords("back_left",self.four_corners["front_right"]\
-                                          ,self)
+                    road.updateCoords(coords,self)
 
 
     def putOn(self,obj):
@@ -160,7 +137,7 @@ class Road():
         #      for the time being they remain until further testing can be done
         self.length = length
         self.width = 2*lane_width
-        
+
         #on is a list of all objects currently on the road
         # Might be useful
         self.on = []
@@ -169,7 +146,7 @@ class Road():
         self.label = "R{}".format(label)
 
 
-    def updateCoords(self,corner,coords,junction):
+    def updateCoords(self,coords,junction):
         """Integral update function as it does most of the heavy lifting for updates.
            Given the coordinates (coords) for where a specified corner of the road 
            (corner) determines where the specified corner (corner) of the road should be.
@@ -178,40 +155,36 @@ class Road():
         next_junc = None
         next_is_to = True
         direction = self.direction
-        
+
         #Used to identify which junction to send update wave to next
-        if junction is self.top_up_lane.to_junction: 
+        if junction is self.top_up_lane.to_junction:
             next_junc = self.top_up_lane.from_junction
             next_is_to = False
-        else: next_junc = self.top_up_lane.to_junction        
+            coord_tag = "front"
+        else:
+            next_junc = self.top_up_lane.to_junction
+            coord_tag = "back"
 
-        cur_coord = self.four_corners[corner]
-        print("({})\tCUR: {}\tNEW:{}".format(self.label,cur_coord,coords))
-        if cur_coord is None or math.sqrt((cur_coord[0]-coords[0])**2 + (cur_coord[1]-coords[1])**2)>10:
+        if None not in list(self.four_corners.values()):
+            cur_coords = [(self.four_corners[coord_tag+"_left"][0]+self.four_corners[coord_tag+"_right"][0])/2,\
+                    (self.four_corners[coord_tag+"_left"][1]+self.four_corners[coord_tag+"_right"][1])/2]
+        else:
+            cur_coords = None
+
+        if cur_coords is None or math.sqrt((cur_coords[0]-coords[0])**2 + (cur_coords[1]-coords[1])**2)>2:
         #if cur_coord is None or (round(cur_coord[0],2) != round(coords[0],2)) or\
         #   (round(cur_coord[1],2) != round(coords[1],2)):
-            setFourCorners(self,corner,coords)
-        
-            #Used to determine the parameters to be passed to the next junction update   
-            #NOTE: If direction >90 and <=270 then the road direction is 
-            #      opposite to that of the lane 
-            if direction in range(0,46):
-                if next_is_to: tag = ["front_left","front_left"]
-                else: tag = ["back_right","back_right"]
-            elif direction in range(46,91):
-                if next_is_to: tag = ["back_right","front_right"]
-                else: tag = ["front_left","back_left"]
-            elif direction in range(271,315):
-                if next_is_to: tag = ["front_right","front_left"]
-                else: tag = ["back_left","back_right"]
-            elif direction in range(315,360):
-                if next_is_to: tag = ["back_left","front_right"]
-                else: tag = ["front_right","back_left"]
+            width = self.width/2
+            length = self.length
+            setFourCorners(self,coord_tag+"_right",[coords[0]+width*math.cos(math.radians(direction-90)),\
+                    coords[1]-width*math.sin(math.radians(direction-90))])
+
+            if next_is_to:
+                next_junc.updateCoords([coords[0]+length*math.cos(math.radians(direction)),\
+                        coords[1]-length*math.sin(math.radians(direction))],self)
             else:
-                print("ERROR: Bad Direction Received ({})".format(direction))
-                exit(-1)
-            #updateCoords(<corner being specified>,<new coordinates for corner>,<self>)
-            next_junc.updateCoords(tag[0],self.four_corners[tag[1]],self)
+                next_junc.updateCoords([coords[0]-length*math.cos(math.radians(direction)),\
+                        coords[1]+length*math.sin(math.radians(direction))],self)
 
         #It does not matter when the lane's coordinates get updated, so leave to end 
         self.top_up_lane.updateCoords("front_left",self.four_corners["front_left"])
@@ -355,22 +328,22 @@ def setFourCorners(obj,corner,coords):
     pt_init = None
     direc,disp = None,None
     #Iterate through all the corners until there are none left that are not set
-    while start is not end or direc is None:
-        if start is "back_right":
+    while start != end or direc is None:
+        if start == "back_right":
             direc = math.radians(obj.direction)
             disp = obj.length
-        elif start is "front_right":
+        elif start == "front_right":
             direc = math.radians(obj.direction+90)
             disp = obj.width
-        elif start is "front_left":
+        elif start == "front_left":
             direc = math.radians(obj.direction+180)
             disp = obj.length
-        elif start is "back_left":
+        elif start == "back_left":
             direc = math.radians(obj.direction+270)
             disp = obj.width
 
         pt_init = obj.four_corners[start]
         obj.four_corners[order[start]] = [round(pt_init[0] + disp*math.cos(direc),2), \
                                           round(pt_init[1] - disp*math.sin(direc),2)]
-        
+
         start = order[start]

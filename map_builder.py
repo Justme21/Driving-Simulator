@@ -78,7 +78,7 @@ def setAnchorPosit(junction,anchor_posit):
       the (x,y) plane, assigns the location for every road and junction on the graph.
       The first parameter passed to "updateCoords" is which corner of the node (by
       the junction's orientation) you are setting"""
-   junction.updateCoords("front_left",anchor_posit) 
+   junction.updateCoords(anchor_posit) 
 
 
 def constructPhysicalOverlay(junctions):
