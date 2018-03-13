@@ -657,19 +657,19 @@ def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug_constru
         simulator.runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,\
                                junc_pairs,run_graphics,debug_sim)
 
-num_junctions = 10
-num_roads = 13
-num_cars = 5
+num_junctions = 5
+num_roads = 5
+num_cars = 2
 run_graphics = True
 
-debug_angle = True
+debug_angle = False
 debug_graph = False
-debug_construction = True
+debug_construction = False
 debug_simulation = False
 
 link_len_range = [25,100]
 
-num_up = 7
+num_up = 2
 angles = None
 
 if angles is None or len(angles)!= num_roads or  angleTest(angles,num_junctions,num_roads)!=0:
