@@ -7,6 +7,17 @@ import vehicle_classes
 #random.seed(49307)
 
 def listFixer(target_list,good_dim,bound_low,bound_high):
+    """Fixes the list provided as parameter so that it satisfies the requirements
+       (i.e. has correct dimensionality). If the list is too long elements are removed.
+       If too long then new, random entries are created using the upper and lower bound values to
+       generate appropriate values.
+       taget_list: - the list that is being 'fixed'
+       good_dim: - parameter containing the correct dimensions for the list
+                   if list is 1D then contains length, otherwise is list that contains the 
+                   length each dimension should be
+        bound_low: - the lower bound for each entry in the list
+                   if list is 1D then this is a scalar value, otherwise it is a list of values
+        bound_high: - same as bound_low but with upper bound values"""
     if target_list is None:
         target_list = []
     if len(target_list) < good_dim[0]:
@@ -49,7 +60,18 @@ def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None,debug=True):
 
 def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
                   run_graphics,debug,car_speeds=None,car_lanes=None):
-
+    """This function runs the simulation given the specified parameters. 
+        num_junctions: - desired number of junctions in the map being created
+        num_roads: - desired number of roads in the map being created
+        num_cars: - desired number of cars in the map being created
+        road_angles: - angles corresponding to the roads to be created
+        road_lengths: - lengths corresponding to the roads to be created
+        junc_pairs: - specifies which roads should be linked together. Is a list of 2 entry numeric tuples
+                      indicating the meeting of two roads at a junction
+        run_graphics: - boolean indicating whether or not the simulator should produce graphical output
+        debug: - boolean indicating whether or not the simulator is being debugged. Affects stdout but not run
+        car_speeds: - optional parameter that, if provided, specifies the speeds each of the cars travels with
+        car_lanes: - optional parameter that, if provided, specifies the lane each car starts in"""
     clock = 0
     runtime = 10.0
 
