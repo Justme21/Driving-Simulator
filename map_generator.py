@@ -45,17 +45,25 @@ class Graph():
         self.coords.append(node.coordinates)
         self.node_list.append(node)
 
+
     def removeLink(self,link):
+        """Opposite of 'addLink'. Detach link from the nodes it is connected to
+           and remove it from the record stored on the graph before deleting it
+           to prevent memory leak."""
         link.removeFromNodes()
         self.link_list.remove(link)
         self.num_links -= 1
         del[link]
 
+
     def removeNode(self,node):
+        """Opposite of 'addNode'. Remove all evidence of node from the records on the
+           graph and then delete to prevent memory leak."""
         if self.debug: print("REMOVING {}: {}".format(node.label,node.coordinates))
         self.num_nodes -= 1
         self.coords.remove(node.coordinates)
-        posit = self.node_list.index(node)
+        #All entries after the node being removed in the node list need their index
+        # reduced by 1.
         for entry in self.node_list:
             if entry.label > node.label:
                 entry.label -= 1
@@ -335,6 +343,9 @@ class Link():
 
 
     def removeFromNodes(self):
+        """Removing self from all nodes it is attached to. This is a distinct
+           operation from the corresponding method in the graph (removeLink).
+           In each node find the pointer identifying the current link and erase it."""
         for node in [self.from_node,self.to_node]:
             for direc in node.directions:
                 if node.directions[direc] is self:
@@ -343,6 +354,8 @@ class Link():
 
 
     def otherNode(self,node):
+        """Shorthand function to identify the node on the opposite side of the link to
+           the one identified. Used for quick traversal of the link."""
         if node is self.from_node:
             return self.to_node
         else:
@@ -374,8 +387,14 @@ def getAngle(open_direc,direc_constr,angle_dict,debug):
 
 
 def partitionAngles(angles):
+    """To construct the visual aspect of the simulation we make the assumption that roads
+       can only enter/exit a junction from a direction closest to the road's angle. Thus
+       roads going up between 45 and 135 degrees are closest to 90, so go out of the top
+       of the junction. 135-225 go out of left, and so on."""
     direction_dict = {"top":[],"bottom":[],"left":[],"right":[]}
     label = None
+    #range is inclusive of the start but not the end values.
+    # top and bottom are exclusive of the boundary values (45,135,225,315 respectively)
     for entry in angles:
         if entry in range(46,135):
             label = "top"
@@ -390,6 +409,10 @@ def partitionAngles(angles):
 
 
 def angleTest(angles,num_junctions,num_roads):
+    """Supposed to ensure that the angles created satisfied basic criteria to ensure the
+       map was buildable (or at least that it wasn't impossible to construct)."""
+    #NOTE: The functionality provided by this might ultimately have been hardcoded into 
+    #      the code itself. Might be worth checking this out later.
     top_bottom = [x for x in angles if x in range(46,135) or x in range(226,315)]
     left_right = [x for x in angles if x not in top_bottom]
     if len(top_bottom)>2*num_junctions:
@@ -400,6 +423,11 @@ def angleTest(angles,num_junctions,num_roads):
 
 
 def probAngleSetter(num_angles,rnge,debug):
+    """Generates a specified number of integer angles within a range.
+       num_angles: - indicates the number of angles to be generated
+       rnge: - 2D list indicating the upper and lower bound for the values to be created
+       debug: - boolean parameter indicating whether or not angles are being debugged.
+                If true all angles created are rounded %90 (to closest multiple)"""
     prob_angle_list = []
     angle = None
     for i in range(num_angles):
@@ -414,9 +442,14 @@ def probAngleSetter(num_angles,rnge,debug):
 
 
 def randomiseAngles(count,num_junctions,ang_list):
+    """For ease of construction when angles are generated in 'generateAngles' they re all either
+       'up' angles, or 'left' angles. Thus, to create diversity in the set of angles created this
+       randomly decides whether or not to 'flip' an angle ('flip' by setting = (self+180)%360"""
     randomiser = None
     for i,entry in enumerate(ang_list):
         randomiser = random.choice([True,False])
+        #There is no point having more angles in one direction than there are junctions
+        # to support them. Thus count<num_junctions
         if count<num_junctions and randomiser:
             ang_list[i] = (entry+180)%360
             count += 1
@@ -424,15 +457,21 @@ def randomiseAngles(count,num_junctions,ang_list):
 
 
 def generateAngles(num_junctions,num_roads,spec_num_up,debug):
+    """Given the number of junctions and the number of roads generates a list of angles equal
+       to the number of roads being constructed.
+       num_junctions: - an upper bound on the number of angles in one direction there can be
+       num_roads: - the number of angles to be generated
+       spec_num_up: - the number of angles that are to be 'up/down'. If this is unspecified
+                      or exceeds 2*num_junctions then the number up/down is randomised
+       debug: - boolean indicating if angles are being debugged or not. Affects the values
+                the angles can be assigned."""
     num_up = None
     angles = []
     count = None
 
-    if spec_num_up is None:
-        while num_up is None or num_up > 2*num_junctions:
+    num_up = spec_num_up
+    while num_up is None or num_up > 2*num_junctions:
             num_up = random.randint(0,2*num_junctions)
-    else:
-        num_up = spec_num_up
 
     up_angles = [x for x in probAngleSetter(num_up,(46,135),debug)]
     left_angles = [x for x in probAngleSetter(num_roads-num_up,(135,226),debug)]
@@ -450,7 +489,12 @@ def generateAngles(num_junctions,num_roads,spec_num_up,debug):
 
 
 def assignEndLinkLengths(links,len_range):
+    """Roads not in loops can have lengths of arbitrary length. Thus these are assigned
+       separately. This also allows us to specify as many lengths as possible before getting
+       bogged down computing values for the remaining lengths."""
     for link in links:
+        #For each link we check whether the from node or the to node is terminal.
+        # if it is then the link is assigned a length and removed from consideration
         if len([x for x in list(link.from_node.directions.values())\
                 if x in links])==1:
             link.length = random.randint(len_range[0],len_range[1])
@@ -459,10 +503,12 @@ def assignEndLinkLengths(links,len_range):
                 if x in links])==1:
             link.length = random.randint(len_range[0],len_range[1])
             links.remove(link)
+    #Return the list of links excepting those whose lengths have already been specified
     return links
 
 
 def dist(coord1,coord2):
+    """Computes Euclidean distance between coord1 and coord2"""
     dist = 0
     for i in range(len(coord1)):
         dist+=(coord2[i]-coord1[i])**2
@@ -470,9 +516,17 @@ def dist(coord1,coord2):
 
 
 def setScaling(scale_list,len_range):
-    scale = list(set(scale_list))
-    scale_list = [x/scale[-1] for x in scale_list]
-    scale = [x/scale[-1] for x in scale]
+    """Determines how much the length of each road should be scaled by
+       based on how long the corresponding link is in the symbolic map.
+       e.g. if a link crosses 2 units to reach another node then it has
+       symbolic length of 2, thus it should sample length values beginning
+       at least as long as links of length 1 unit, adn as much as twice.
+       This function does the reverse, identifying the longest symbolic link
+       and giving a scaling of 1. All other links are assigned values that are
+       some fraction based on their relative values."""
+    scale = list(set(scale_list)) #Ordered list of symbolic lengths largest -> smallest
+    scale_list = [x/scale[-1] for x in scale_list] #lengths relative to largest
+    scale = [x/scale[-1] for x in scale] #scaled values become proportions
     new_scale_list = []
     pos,lo_bound,up_bound = None,None,None
     for entry in scale_list:
@@ -484,9 +538,15 @@ def setScaling(scale_list,len_range):
 
 
 def setLinkLengths(link_list,len_range,debug):
+    """Assign lengths to the links in link_list
+       link_list: - list of links in the graph
+       len_range: - upper and lower integer bounds on the allowed link values
+       debug: - boolean parameter indicating whether the link builder is being debugged"""
     links = list(link_list)
     prev_size = None
     cur_size = len(links)
+    #Once links stops shrinking then there are no more
+    # end links to assign value to
     while prev_size is None or cur_size<prev_size:
         links = assignEndLinkLengths(links,len_range)
         prev_size = cur_size
@@ -495,7 +555,7 @@ def setLinkLengths(link_list,len_range,debug):
     # terminal link. Thus links now only contains links in loops
     linger_index = 0
     try_count = 0
-    try_limit = 5
+    try_limit = 5 #How many times it will try and construct lengths for loops before giving up
     repeat = True
     cemented = False
     temp_pos = None
@@ -513,6 +573,7 @@ def setLinkLengths(link_list,len_range,debug):
         mod_list = []
         scale_list = []
 
+        #Identify a loop in the links with at least one unassigned value
         while link not in loop_list:
             loop_list.append(link)
             mod_list.append(-1+2*(cur_node == link.from_node)) #If true mod is 1, else is -1
@@ -527,6 +588,9 @@ def setLinkLengths(link_list,len_range,debug):
                     if entry.length is not None:
                         next_links.remove(entry)
                         break
+            #Here we are ensuring that we identify the smallest loop possible
+            # by ensuring the link that is "closest" angle-wise to the current link angle
+            # is chosen to be in the loop
             min_diff = 359
             min_link = None
             for entry in next_links:
@@ -542,20 +606,25 @@ def setLinkLengths(link_list,len_range,debug):
         scale_list = scale_list[temp_pos:]
         if debug:
             print("This is a loop: {}".format([((x.from_node.label,x.to_node.label),mod_list[i]) for i,x in enumerate(loop_list)]))
+        #The computation works because the last two links are used as a basis to fix changes caused by the other links in the loop
+        # therefore the last two links cannot be collinear
         while loop_list[-1].angle%180 == loop_list[-2].angle%180:
             loop_list = [loop_list[-1]] + loop_list[:-1]
             mod_list = [mod_list[-1]] + mod_list[:-1]
             scale_list = [scale_list[-1]] + scale_list[:-1]
         temp_list = [x.length is not None for x in loop_list]
         if True in temp_list:
+            #In this case there are entries in the loop that have already been assigned so we want them
+            # at the front of the loops
             temp_pos = temp_list.index(True)
             loop_list = loop_list[temp_pos:]+list(loop_list[:temp_pos])
             mod_list = mod_list[temp_pos:]+list(mod_list[:temp_pos])
             scale_list = scale_list[temp_pos:]+list(scale_list[:temp_pos])
         if debug:
             print("This is Loop_List Now: {}".format([((x.from_node.label,x.to_node.label),mod_list[i]) for i,x in enumerate(loop_list)]))
-        scale_list = setScaling(scale_list,len_range)
+        scale_list = setScaling(scale_list,len_range) #for scaling the link lengths
         cemented = False
+        #This is the process of assigning the lengths
         while not cemented and try_count<try_limit:
             len_list = [x.length for x in loop_list]
             horiz_sum = 0
@@ -605,11 +674,14 @@ def setLinkLengths(link_list,len_range,debug):
                 print("TESTING OUTPUT")
                 print("{}\n{}\nTOTAL; SIN: {}\n{}\nTOTAL;COS: {}".format(linkprintout[:-1],printout_sin[:-1],test_sum_sin,printout_cos[:-1],test_sum_cos))
 
+            #I feel like I intended to do something else here to ensure negative legnth values are not stored.
+            # But I don't appear to have done anything of the sort here.
             if True in [x<0 for x in len_list]:
                 if debug: print("DISREGARD ABOVE")
                 try_count += 1
             else: cemented = True
 
+        #We can keep trying
         if try_count<try_limit:
             for i,entry in enumerate(loop_list):
                 entry.length = len_list[i]
@@ -618,6 +690,7 @@ def setLinkLengths(link_list,len_range,debug):
             for i,entry in enumerate(linger_list):
                 if debug:
                     print("{}-{}\t{}".format(entry.from_node.label,entry.to_node.label,entry.length))
+                #Identifying where to start from next
                 if entry.length is None: linger_index = i
             if debug:
                 print("\n")
@@ -633,12 +706,17 @@ def setLinkLengths(link_list,len_range,debug):
 
 
 def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug_construct,debug_sim):
+    """Builds and runs the simulation given the input parameters
+       graph: - a correct symbolic representation that is being simulated
+       num_cars: - number of cars to be in the simulation
+       link_len_range: - the range of values that the length of the roads can take
+       run_graphics: - boolean indicating whether or not the graphical overlay should be generated
+       debug_construct: - boolean indicating whether construction is being debugged
+       debug_sim: - boolean indicating whether simulator is being debugged"""
     num_junctions = len(graph.node_list)
     num_roads = len(graph.link_list)
 
     road_angles = [x.angle for x in graph.link_list]
-    #NOTE: This is a temporary fix. When loops emerge this will not be good enough
-    #road_lengths = [random.randint(25,100) for _ in range(num_roads)]
     road_lengths = setLinkLengths(graph.link_list,link_len_range,debug_construct)
 
     junc_pairs = []
