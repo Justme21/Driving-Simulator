@@ -719,6 +719,8 @@ def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug_constru
     road_angles = [x.angle for x in graph.link_list]
     road_lengths = setLinkLengths(graph.link_list,link_len_range,debug_construct)
 
+    car_goals = [random.randint(0,num_junctions) for x in range(num_roads)]
+
     junc_pairs = []
     pre,post = None,None
     for link in graph.link_list:
@@ -730,14 +732,15 @@ def constructSimulation(graph,num_cars,link_len_range,run_graphics,debug_constru
         else:
             junc_pairs.append((pre.label,post.label))
         print("{}-{}\t{}\t{}".format(link.from_node.label,link.to_node.label,junc_pairs[-1],link.length))
-    
+
     if not debug_construct:
         simulator.runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,\
-                               junc_pairs,run_graphics,debug_sim)
+                               junc_pairs,car_goals,run_graphics,debug_sim)
 
 num_junctions = 5
 num_roads = 5
 num_cars = 2
+
 run_graphics = True
 
 debug_angle = False

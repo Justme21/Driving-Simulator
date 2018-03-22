@@ -65,13 +65,13 @@ def setDimensions(junction):
         if (lane.direction<=45 or lane.direction>=315) or \
               (lane.direction>=135 and lane.direction<=225):
             height = dimensionSolver(lane.width,90-lane.direction,height)
-        
+
         else:
             width = dimensionSolver(lane.width,lane.direction,width)
 
     junction.width = width
     junction.length = height
-    
+
 
 def setAnchorPosit(junction,anchor_posit):
    """Given an arbitrary initial node (junction) and position for that node on 
@@ -110,7 +110,7 @@ def constructPhysicalOverlay(junctions):
     anchor_point[0] -= min_X
     anchor_point[1] -= min_Y
     setAnchorPosit(anchor_junc,anchor_point)
-    
+
 
 def buildMap(num_junctions,num_roads,road_angles,road_lens,junc_pairs):
     """Runs the map builder. Constructs the junctions and roads and initiates the
@@ -125,4 +125,4 @@ def buildMap(num_junctions,num_roads,road_angles,road_lens,junc_pairs):
 
     constructPhysicalOverlay(junctions)
 
-    return junctions,roads 
+    return junctions,roads

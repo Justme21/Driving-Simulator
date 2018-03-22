@@ -229,23 +229,23 @@ class Lane():
         self.direction = direction
 
         #Fairly self-explanatory.
-        self.length = length 
+        self.length = length
         self.width = lane_width
 
         #From and to based on left (top on horizontal road) lane of road.
         self.from_junction = None
         self.to_junction = None
-        
+
         #Dictionary to store the locations of the four corners of the lane
         self.four_corners = {"front_left":None,"front_right":None,"back_left":None,\
                              "back_right":None}
-        
+
         #A reference to the other lane on this lane's road
         self.lane_twin = None
 
         #The road that this is a lane on
         self.road = road
-        
+
         #Determines if the lane is going left/up, used in updateCoords
         self.is_top_up = is_top_up
 

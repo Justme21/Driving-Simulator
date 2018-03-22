@@ -8,7 +8,7 @@ car_length = 4.17
 car_width = 1.7
 
 class Car():
-    def __init__(self,road,is_top_lane,v,label,debug,timestep=.1):
+    def __init__(self,road,is_top_lane,v,is_ego,label,debug,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -18,12 +18,15 @@ class Car():
         #vehicle from the orientation of the car
         self.four_corners = {"front_left":None,"front_right":None,"back_left":None,\
                              "back_right":None}
-  
+
         #Velocity of the car
         self.v = None
 
         #Heading of the car (direction it is facing in degrees)
         self.heading = None
+
+        #The label of the junction that the car is to drive to
+        self.is_ego = is_ego
 
         #Dimensions of the car
         self.length = car_length
@@ -37,16 +40,36 @@ class Car():
         #The processing speed of the car (how often it changes it's action)
         self.timestep = timestep
         self.debug = debug
-        
+
         #Sense Variables
         self.on_road = True #Check if car still on road
         self.crashed = False #Check if car has crashed into something
 
         self.label = "C{}".format(label)
-        
+
+        #Initialise Trajectory and Waypoint
+        self.traj_posit = 0
+        self.traj,self.waypoints = self.buildTrajectory(road,is_top_lane)
+
+        #Initialise Public and Private State
+        self.pub_state = None
+        self.priv_state = None
+
         #Initialise the position, velocity and heading features
         self.initSetup(road,v,is_top_lane)
-        
+
+
+    def buildTrajectory(self,road,is_top_lane):
+        """Given the current road the vehicle is on (and boolean indicating lane on the road)
+           intialises and returns a new trajectory with the next point the end of that lane"""
+        lane = None
+        if is_top_lane:
+            lane = road.top_up_lane
+        else:
+            lane = road.bottom_down_lane
+        traj = Trajectory(lane.to_junction)
+        return traj
+
 
     def setFourCorners(self):
         """Compute the initial coordinates of the four corners of the car (with respect
@@ -111,7 +134,7 @@ class Car():
         y_disp = round((self.length/2)+ random.random()*(lane.length-self.length),2)
         direction = self.heading
         disp = angularToCartesianDisplacement(x_disp,y_disp,direction)
-  
+
         lane_coords = lane.four_corners["front_left"]
         lane_x = lane_coords[0]
         lane_y = lane_coords[1]
@@ -127,7 +150,7 @@ class Car():
 
         #The coordinates of each corner of the car
         self.setFourCorners()
-        
+
         #NOTE: In the future this should be changed so that intial speed is something
         #      reasonable and not just arbitrarily selected.
         self.v = v #19.8km/h units are metres per second 
@@ -145,7 +168,7 @@ class Car():
         #y_dot = self.v*math.sin(math.radians(turn_angle))
         head_dot = turn_angle
         v_dot = accel
-        
+
         #Applying the changes calculated above
         self.y_com += self.timestep*y_dot
         self.x_com += self.timestep*x_dot
@@ -168,7 +191,7 @@ class Car():
         # we were already on. Thus we find candidates by considering self.on.
         for obj in list(self.on):
             obj_coord = obj.four_corners
-            
+
             if isinstance(obj,road_classes.Lane):
                 #We compute the distance from the car to the object by choosing
                 #The midpoint of each end of the object (easiest).
@@ -279,9 +302,12 @@ class Car():
                 entry.printStatus()
             exit(-1)
 
+
     def sense(self):
         """Change the sense variables to match the vehicle's new position/capture
            changes in state."""
+        self.updatePublicState()
+        self.updatePrivateState()
         self.checkPositState()
 
 
@@ -295,6 +321,47 @@ class Car():
         print("{}{}\tON: {}\tHEAD: {}\tSPEED: {}\n{}\t {}".format(mod,\
                self.label,[x.label for x in self.on],self.heading,self.v,\
                self.label,dims))
+
+
+def computeTrajectoryPoint(stop_point,front_back_label):
+    fl = stop_point.four_corners["{}_left".format(front_back_label)]
+    fr = stop_point.four_corners["{}_right".format(front_back_label)]
+    pt = ((fl[0] + fr[0])/2,(fl[1]+fr[1])/2)
+    return pt
+
+
+def buildTrajectory(start_point):
+    next_stop = start_point.to_junction #next_stop is junction next to be entered
+    trajectory = []
+    waypoints = []
+    pt = computeTrajectoryPoint(start_point,"front")
+    trajectory.append(next_stop)
+    waypoints.append(pt)
+    while len(trajectory)<3 or random.random()<.5:
+        while next_stop in trajectory:
+            next_stop = random.choice(next_stop.out_lanes)
+        pt = computeTrajectoryPoint(next_stop,"back")
+        trajectory.append(next_stop.road) #Here next_stop is the lane that leads out of the junction
+        waypoints.append(pt)
+        if next_stop.to_junction in trajectory: break
+        else:
+            pt = computeTrajectoryPoint(next_stop,"front")
+            next_stop = next_stop.to_junction
+            trajectory.append(next_stop)
+            waypoints.append(pt)
+    return trajectory,waypoints
+
+
+def initialiseTrajectory(road,is_top_lane):
+    """Given the current road the vehicle is on (and boolean indicating lane on the road)
+       intialises and returns a new trajectory with the next point the end of that lane"""
+    lane = None
+    if is_top_lane:
+        lane = road.top_up_lane
+    else:
+        lane = road.bottom_down_lane
+    traj,waypoints = buildTrajectory(lane)
+    return traj,waypoints
 
 
 def checkOn(car, obj):

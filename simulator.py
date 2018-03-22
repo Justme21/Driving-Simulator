@@ -36,7 +36,7 @@ def listFixer(target_list,good_dim,bound_low,bound_high):
     return target_list
 
 
-def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None,debug=True):
+def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None,car_goals=None,debug=True):
     """Constructs the car objects and assigns them coordinates that puts them on either
        specified lanes or else randomly chooses lanes to put them on."""
     cars = []
@@ -52,14 +52,16 @@ def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None,debug=True):
     # the car should be placed. Once initialised with this information the Car object
     # will give itself a random location on the specified lane with the same heading as
     # the lane.
+    is_ego = True #We want the first car placed to be ego, and all other cars to not be ego
     for i,entry in enumerate(car_lanes):
         cars.append(vehicle_classes.Car(roads[car_lanes[i][0]],car_lanes[i][1],\
-                    car_speeds[i],i,debug))
+                    car_speeds[i],is_ego,i,debug))
+        is_ego = False
     return cars
 
 
 def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  run_graphics,debug,car_speeds=None,car_lanes=None):
+                  car_goals,run_graphics,debug,car_speeds=None,car_lanes=None):
     """This function runs the simulation given the specified parameters. 
         num_junctions: - desired number of junctions in the map being created
         num_roads: - desired number of roads in the map being created
@@ -68,6 +70,7 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
         road_lengths: - lengths corresponding to the roads to be created
         junc_pairs: - specifies which roads should be linked together. Is a list of 2 entry numeric tuples
                       indicating the meeting of two roads at a junction
+        car_goals: - list of integers indicating the junction that each car is to drive towards
         run_graphics: - boolean indicating whether or not the simulator should produce graphical output
         debug: - boolean indicating whether or not the simulator is being debugged. Affects stdout but not run
         car_speeds: - optional parameter that, if provided, specifies the speeds each of the cars travels with
@@ -77,9 +80,8 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
 
     junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,\
                                            road_lengths,junc_pairs)
-    #car_speeds = [5.5,0]
-    #car_lanes = [(0,1),(1,1)]
-    cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes,debug)
+
+    cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes,car_goals,debug)
 
     if run_graphics:
         g_sim = graphic_simulator.GraphicSimulator(junctions,roads,cars)
@@ -128,8 +130,9 @@ if __name__ == "__main__":
 
     car_speeds = [5.5,0]
     car_lanes = [(0,1),(1,1)]
+    car_goals = [0,3,3,3,3]
 
     run_graphics = True
     debug = False
     runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  run_graphics,debug)
+                  car_goals,run_graphics,debug)
