@@ -13,7 +13,7 @@ def listFixer(target_list,good_dim,bound_low,bound_high):
        generate appropriate values.
        taget_list: - the list that is being 'fixed'
        good_dim: - parameter containing the correct dimensions for the list
-                   if list is 1D then contains length, otherwise is list that contains the 
+                   if list is 1D then contains length, otherwise is list that contains the
                    length each dimension should be
         bound_low: - the lower bound for each entry in the list
                    if list is 1D then this is a scalar value, otherwise it is a list of values
@@ -62,7 +62,7 @@ def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None,car_goals=None,de
 
 def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
                   car_goals,run_graphics,debug,car_speeds=None,car_lanes=None):
-    """This function runs the simulation given the specified parameters. 
+    """This function runs the simulation given the specified parameters.
         num_junctions: - desired number of junctions in the map being created
         num_roads: - desired number of roads in the map being created
         num_cars: - desired number of cars in the map being created
@@ -89,6 +89,7 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
     if debug:
         map_builder.printContents(junctions[0])
         print("\n")
+
     t0 = time.time()
     while(clock<runtime):
         if debug: print("TIME: {}".format(clock))
@@ -101,7 +102,7 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
                 print("\n")
         if run_graphics:
             g_sim.update()
-    
+
         clock += .1
     t1 = time.time()
     print("Runtime is {}".format(t1-t0))
@@ -122,7 +123,7 @@ if __name__ == "__main__":
     num_junctions = 4
     num_roads = 3
     num_cars = 5
-    
+
     road_angles = [180,0,50]
     road_lengths = [30,30,30]
 

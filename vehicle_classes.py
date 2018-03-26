@@ -19,8 +19,10 @@ class Car():
         self.four_corners = {"front_left":None,"front_right":None,"back_left":None,\
                              "back_right":None}
 
-        #Velocity of the car
+        #Velocity and accelerations of the car of the car
         self.v = None
+        self.accel = 0
+        self.angle_accel = 0
 
         #Heading of the car (direction it is facing in degrees)
         self.heading = None
@@ -49,14 +51,16 @@ class Car():
 
         #Initialise Trajectory and Waypoint
         self.traj_posit = 0
-        self.traj,self.waypoints = initialiseTrajectory(road,is_top_lane)
+        self.trajectory,self.waypoints = initialiseTrajectory(road,is_top_lane)
+        if self.debug:
+            print("{} has TRAJECTORY: {}".format(self.label,[x.label for x in self.traj]))
 
         #Initialise Public and Private State
         self.pub_state = None
         self.priv_state = None
 
         self.repo_len = int((1/timestep)*2) #Store the past 2 seconds of state information
-        self.pub_state_repo = []
+        self.public_state_repo = []
 
         #Initialise the position, velocity and heading features
         self.initSetup(road,v,is_top_lane)
@@ -257,6 +261,9 @@ class Car():
            (empty if it has not crashed)"""
         has_crashed = False
         potentials,crashed = [],[]
+        #We want to consider all the things that are on everything that we are on
+        # Since Roads are not stored in the list of things we are on this will only
+        # be other cars
         for obj in self.on:
             for entry in obj.on:
                 if entry not in potentials and entry is not self:
@@ -285,23 +292,49 @@ class Car():
         if self.debug: print("Checking On Anything New")
         on_candidates = self.checkNewOn()
         if self.debug: print("Done Checking On")
+        #Check if you have left anything you were on before
         self.checkNewOff()
+        #Check if we are sufficiently "on" any of the candidates identified earlier
         self.testCandidates(on_candidates)
         if self.debug: print("Done Checking Off")
-        crashed,crash_list = self.checkForCrash()
-        if crashed:
-            print("Oh MY GOSH A CRASH!")
-            self.printStatus()
-            for entry in crash_list:
-                entry.printStatus()
-            exit(-1)
+
+        #Checking if we have wandered off the map
+        self.on_road = False
+        for entry in self.on:
+            if isinstance(entry,road_classes.Lane) or isinstance(entry,road_classes.Junction):
+                self.on_road = True
+                break
+
+        #No point repeatedly checking for a crash that already happened
+        if not self.crashed:
+            crashed,crash_list = self.checkForCrash()
+            if crashed:
+                self.crashed = True
+                for entry in crash_list: entry.crashed = True
+                #Think of a better way to address crashing here.
+                if self.debug:
+                    print("Oh MY GOSH A CRASH!")
+                    self.printStatus()
+                    for entry in crash_list:
+                        entry.printStatus()
+                    exit(-1)
+
+        #Progress the Trajectory Goal
+        on = None
+        for entry in self.on:
+            on = entry
+            if isinstance(on,road_classes.Lane):
+                on = on.road
+            if on is self.trajectory(self.traj_posit):
+                self.traj_posit += 1
+                break
 
 
-    def updatePublicState():
+    def updatePublicState(self):
         state = []
         #Position of the vehicle. Mainly for relative computation for other cars
         state += [self.x_com,self.y_com]
-        
+
         #Velocity parallel and perpendicular to the current road
         alpha = self.heading
         i = 0
@@ -321,16 +354,49 @@ class Car():
         self.public_state_repo.append(state)
 
 
-    def updatePrivateState():
+    def updatePrivateState(self):
         state = []
+        #The time the vehicle has been runnning on this trajectory for
         state.append(self.time)
+        #The distance from the next waypoint in the trajectory
+        waypt = self.waypoints[self.traj_posit]
+        ego_com = (self.x_com,self.y_com)
+        state.append(computeDistance(ego_com,waypt))
+
+        #The perpendicular distance to either side of the lane/junction
+        obj = self.trajectory[self.traj_posit]
+        if obj.direction%180 == 90:
+            state.append(math.fabs(ego_com[0]-obj.four_corners["back_right"][0]))
+            state.append(math.fabs(ego_com[0]-obj.four_corners["back_left"][0]))
+        else:
+            slope = math.tan(obj.heading)
+            coord_right = obj.four_corners["back_right"]
+            coord_left = obj.four_corners["back_left"]
+            #Formula for perpendicular distance between point and a line in form Ax+By+C
+            # where A = -slope, B=1 and C=(slope*x1-y1)
+            # d = |Ax+By+c|/<sqrt>(A^2+B^2)
+            state.append(math.fabs(-slope*ego_com[0]+ego_com[1]+(slope*coord_right[0]-coord_right[1]))/\
+                    math.sqrt(slope**2+1))
+            state.append(math.fabs(-slope*ego_com[0]+ego_com[1]+(slope*coord_left[0]-coord_left[1]))/\
+                    math.sqrt(slope**2+1))
+
+        #The current acceleration and angular acceleration
+        state.append(self.accel)
+        state.append(self.angle_accel)
+        #Whether or not the car has crashed and whether or not it is still on the road
+        state.append(self.crashed)
+        state.append(self.on_road)
+
 
     def sense(self):
         """Change the sense variables to match the vehicle's new position/capture
            changes in state."""
-        self.updatePublicState()
-        self.updatePrivateState()
+        #Perform checks for some of the private state values
         self.checkPositState()
+        #Update the Public State values
+        self.updatePublicState()
+        #Update the Private state values
+        self.updatePrivateState()
 
 
     def printStatus(self,mod=""):
@@ -359,18 +425,23 @@ def buildTrajectory(start_point):
     pt = computeTrajectoryPoint(start_point,"front")
     trajectory.append(next_stop)
     waypoints.append(pt)
-    while len(trajectory)<3 or random.random()<.5:
+    #Trajectories must be at least 3 stops long but no more than 9
+    while len(trajectory)<10 and (len(trajectory)<3 or random.random()<.5):
+        #Choosing a lane out of the junction to add to the trajectory
         while next_stop in trajectory:
             next_stop = random.choice(next_stop.out_lanes)
         pt = computeTrajectoryPoint(next_stop,"back")
         trajectory.append(next_stop.road) #Here next_stop is the lane that leads out of the junction
         waypoints.append(pt)
-        if next_stop.to_junction in trajectory: break
-        else:
-            pt = computeTrajectoryPoint(next_stop,"front")
-            next_stop = next_stop.to_junction
-            trajectory.append(next_stop)
-            waypoints.append(pt)
+
+        #Adding the junction the current lane leads into
+        pt = computeTrajectoryPoint(next_stop,"front")
+        next_stop = next_stop.to_junction
+        trajectory.append(next_stop)
+        waypoints.append(pt)
+        #Here we are allowing loops to form in the trajectory. But they end the trajectory
+        #if the current junction was previously in the trajectory then it is a terminal point
+        if next_stop in trajectory[:-1]: break
     return trajectory,waypoints
 
 
