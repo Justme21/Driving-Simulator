@@ -49,26 +49,20 @@ class Car():
 
         #Initialise Trajectory and Waypoint
         self.traj_posit = 0
-        self.traj,self.waypoints = self.buildTrajectory(road,is_top_lane)
+        self.traj,self.waypoints = initialiseTrajectory(road,is_top_lane)
 
         #Initialise Public and Private State
         self.pub_state = None
         self.priv_state = None
 
+        self.repo_len = int((1/timestep)*2) #Store the past 2 seconds of state information
+        self.pub_state_repo = []
+
         #Initialise the position, velocity and heading features
         self.initSetup(road,v,is_top_lane)
 
-
-    def buildTrajectory(self,road,is_top_lane):
-        """Given the current road the vehicle is on (and boolean indicating lane on the road)
-           intialises and returns a new trajectory with the next point the end of that lane"""
-        lane = None
-        if is_top_lane:
-            lane = road.top_up_lane
-        else:
-            lane = road.bottom_down_lane
-        traj = Trajectory(lane.to_junction)
-        return traj
+        #Initialise time. Used to record how long it takes to achieve an objective
+        self.time = 0
 
 
     def setFourCorners(self):
@@ -302,6 +296,34 @@ class Car():
                 entry.printStatus()
             exit(-1)
 
+
+    def updatePublicState():
+        state = []
+        #Position of the vehicle. Mainly for relative computation for other cars
+        state += [self.x_com,self.y_com]
+        
+        #Velocity parallel and perpendicular to the current road
+        alpha = self.heading
+        i = 0
+        while i<len(self.on) and not (isinstance(self.on[i],road_classes.Lane) or\
+                   isinstance(self.on[i],road_classes.Junction)): i+=1
+        beta = self.on[i].direction
+        v_par = self.v*math.cos(math.radians(alpha-beta))
+        v_perp = self.v*math.sin(math.radians(alpha-beta))
+        state += [v_par,v_perp]
+
+        #Heading
+        state.append(self.heading)
+
+        self.pub_state = state
+
+        while len(self.public_state_repo)>=self.repo_len: del(self.public_state_repo[0])
+        self.public_state_repo.append(state)
+
+
+    def updatePrivateState():
+        state = []
+        state.append(self.time)
 
     def sense(self):
         """Change the sense variables to match the vehicle's new position/capture
