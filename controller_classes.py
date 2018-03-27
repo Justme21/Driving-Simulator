@@ -1,97 +1,70 @@
-import math
-import random
-import road_classes
-import vehicle_classes
+import torch
+from torch import nn
+from torch.autograd import Variable
+
+
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward'))
+
+
+class ReplayMemory(object):
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.memory = []
+        self.position = 0
+
+    def push(self, *args):
+        """Saves a transition."""
+        if len(self.memory) < self.capacity:
+            self.memory.append(None)
+        self.memory[self.position] = Transition(*args)
+        self.position = (self.position + 1) % self.capacity
+
+    def sample(self, batch_size):
+        return random.sample(self.memory, batch_size)
+
+    def __len__(self):
+        return len(self.memory)
+
+
+class DQN(nn.module):
+
+    def __init__(self,state_len,num_parti_accel,num_parti_angle):
+        self.layer_list = []
+        while state_len>max(20,num_parti_accel,num_parti_angle):
+            self.layer_list.append(nn.ReLU(nn.Linear(state_len,int(state_len/2))))
+            state_len= int(state_len/2)
+
+        self.last_layers_accel = []
+        self.last_layers_angle = []
+        while state_len>max(num_parti_accel,num_parti_angle):
+            self.last_layers_accel.append(nn.ReLU(nn.Linear(state_len,state_len/2)))
+            self.last_layers_angle.append(nn.ReLU(nn.Linear(state_len,state_len/2)))
+            state_len = int(state_len/2)
+        self.last_layers_accel.append(nn.Softmax(nn.Linear(state_len,num_parti_accel)))
+        self.last_layers_angle.append(nn.Softmax(nn.Linear(state_len,num_parti_angle)))
+
+
+    def forward(x):
+        for layer in self.layer_list:
+            x = layer(x)
+        y = x
+        z = x
+        for l_accel,l_angle in zip(self.last_layers_accel,self.last_layers_angle):
+            y = l_accel(y)
+            z = l_angle(z)
+        return y,z
+
 
 class Controller():
-    def __init__(self,action_list,car,map):
-        #The lists that will store the per-use values for the features being used
-        # and the associated weights
-        self.weights = []
-        self.features = []
+    def __init__(self,state_len,num_partition_accel,num_partition_angle):
+        self.batch_size = 128
+        self.gamma = .999
+        self.epsilon_start = 0.9
+        self.epsilon_end = .05
+        self.epsilon_decay = 200
 
-        #The master lists of trained weights grouped by context
-        self.trained_in_weights = [] #Weights for ego vehicle features
-        self.trained_env_weights = {} #Weights for environment features
-        self.trained_veh_weights = [] #Weights for other vehicle features
+        self.num_steps = 0
 
-        self.weights = {"internal": self.trained_in_weights,\
-                        "environment": self.trained_env_weights,\
-                        "vehicles": self.trained_veh_weights}
-
-        self.total_reward = 0
-
-        #Learning rate and horizon depth
-        self.alpha = .01
-        self.gamma = .5
-
-        #The list of discrete actions the controller can choose 
-        self.action_list = action_list
-        self.weights_unset = True
-       
-        self.car = car
-
-        self.weight_list = []
-        self.reward_list = []
-
-
-    def getInternalFeatures(self):
-        feature_list = []
-        ego = self.car
-        
-        feature_list.append(ego.v>50)
-        feature_list.append(ego.v>40)
-        feature_list.append(ego.v>30)
-        feature_list.append(ego.v>20)
-        feature_list.append(ego.v>10)
-        feature_list.append(ego.on_road)
-        feature_list.append(ego.crashed)
-
-        return feature_list
-
-    def getEnvironmentFeatures(self,env):
-        feature_list = []
-        ego = self.car
-
-        if isinstance(env,road_classes.Lane):
-            #Binary feature: if car is going the direction intended by the road
-            feature_list.append(int(ego.heading/180)==int(env.direction/180))
-            if int(ego.heading/180) == int(env.direction/180):
-                feature_list.append(math.fabs(ego.four_corners["front_left"][0]-\
-                        env.four_corners["front_left"][0])<env.width/3)
-                feature_list.append(math.fabs(ego.four_corners["front_left"][0]-\
-                        env.four_corners["front_left"][0])<env.width/2)
-                feature_list.append(math.fabs(ego.four_corners["front_left"][0]-\
-                        env.four_corners["front_left"][0])>2*env.width/3)
-                feature_list.append(math.fabs(env.four_corners["front_left"][1]-\
-                        ego.four_corners["front_left"][1])<ego.length)
-                feature_list.append(math.fabs(env.four_corners["front_left"][1]-\
-                        ego.four_corners["front_left"][1])>env.length/5)
-            else:
-                feature_list.append(math.fabs(ego.four_corners["front_left"][0]-\
-                        env.four_corners["back_right"][0])<env.width/3)
-                feature_list.append(math.fabs(ego.four_corners["front_left"][0]-\
-                        env.four_corners["back_right"][0])<env.width/2)
-                feature_list.append(math.fabs(ego.four_corners["front_left"][0]-\
-                        env.four_corners["back_right"][0])>2*env.width/3)
-                feature_list.append(math.fabs(ego.four_corners["front_left"][0]-\
-                        env.four_corners["back_right"][0])<env.width/3)
-                feature_list.append(math.fabs(env.four_corners["front_left"][1]-\
-                        ego.four_corners["back_right"][1])<ego.length)
-                feature_list.append(math.fabs(env.four_corners["front_left"][1]-\
-                        ego.four_corners["back_right"][1])>ego.length/5)
-
-
-        elif isinstance(env,road_classes.Junction):
-
-
-
-    def getFeatures(self,action):
-        feature_list = []
-        feature_list.append(self.getInternalFeatures())
-        for env in self.on:
-            feature_list.append(self.getEnvironmentFeatures(env))
-            for car in [x in env.on if x is not self.car]:
-                feature_list.append(self.getVehicleFeatures())
-        
-        if self.weights_unset: self.weights_unset = False
+        self.memory = 
