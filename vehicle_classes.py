@@ -1,14 +1,15 @@
+import controller_classes
 import math
 import random
 import road_classes
 
 #Dimensions are those of a "Ford Focus 5-door 1.8i Zetec" as found at
 # http://www.metric.org.uk/motoring  . Units are metres
-car_length = 4.17 
+car_length = 4.17
 car_width = 1.7
 
 class Car():
-    def __init__(self,road,is_top_lane,v,is_ego,label,debug,timestep=.1):
+    def __init__(self,road,is_top_lane,v,is_ego,label,debug,controller=None,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -46,6 +47,7 @@ class Car():
         #Sense Variables
         self.on_road = True #Check if car still on road
         self.crashed = False #Check if car has crashed into something
+        self.is_complete = False
 
         self.label = "C{}".format(label)
 
@@ -64,6 +66,12 @@ class Car():
 
         #Initialise the position, velocity and heading features
         self.initSetup(road,v,is_top_lane)
+
+        #Initilaising the Controller
+        if controller is not None:
+            self.controller = controller
+        else:
+            self.controller = controller_classes.randomController()
 
         #Initialise time. Used to record how long it takes to achieve an objective
         self.time = 0
@@ -154,10 +162,20 @@ class Car():
         self.v = v #19.8km/h units are metres per second 
 
 
-    def move(self,accel,turn_angle):
+    def composeState():
+        return self.pub_state+self.priv_state
+
+
+    def chooseAction(self):
+        state = self.composeState()
+        accel_cat,angle_cat = self.controller.selectAction(state)
+
+    def move(self):
         """The motion dynamics of the vehicle. Given an input acceleration and wheel-
            angle this determines how much the vehicle should move, and then resets the
            vehicles coordinates appropriately."""
+
+        accel,turn_angle = self.chooseAction()
         #The changes induced by the dynamics
         x_dot = self.v*math.cos(math.radians(self.heading))
         #y_dot is set as negative to reflect the fact the pygame coordinate space
@@ -328,12 +346,19 @@ class Car():
             if on is self.trajectory(self.traj_posit):
                 self.traj_posit += 1
                 break
+        if self.traj_posit == len(self.trajectory): self.is_complete = True
+        if self.is_complete and not self.is_ego:
+            next_lane = random.choice(on.out_lanes)
+            self.trajectory,self.waypoints = initialiseTrajectory(next_lane,next_lane.is_top_up)
+            self.is_complete = False
 
 
     def updatePublicState(self):
         state = []
         #Position of the vehicle. Mainly for relative computation for other cars
-        state += [self.x_com,self.y_com]
+        #NOTE: Come back to this later. It seems clear that this will not be useful in computing
+        # the ego state.
+        #state += [self.x_com,self.y_com]
 
         #Velocity parallel and perpendicular to the current road
         alpha = self.heading
@@ -346,7 +371,8 @@ class Car():
         state += [v_par,v_perp]
 
         #Heading
-        state.append(self.heading)
+        #state.append(self.heading)
+        state.append(beta-alpha)
 
         self.pub_state = state
 
@@ -386,6 +412,7 @@ class Car():
         #Whether or not the car has crashed and whether or not it is still on the road
         state.append(self.crashed)
         state.append(self.on_road)
+        state.append(self.is_complete)
 
 
     def sense(self):

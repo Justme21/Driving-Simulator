@@ -1,3 +1,4 @@
+import controller_classes
 import graphic_simulator
 import map_builder
 import random
@@ -60,6 +61,50 @@ def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None,car_goals=None,de
     return cars
 
 
+def constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,\
+                         num_cars,car_speeds,car_lanes,car_goals,debug):
+
+    junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,\
+                                           road_lengths,junc_pairs)
+
+    cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes,car_goals,debug)
+    return junctions,roads_cars
+
+
+def canGo(cars):
+    if cars[0].is_complete: return False
+    for car in cars:
+        if car.crashed or not car.on_road: return False
+    return True
+
+
+def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
+                car_goals,car_speeds,car_lanes,controller):
+
+    cur_states = [None for _ in range(num_cars)]
+    next_states = [None for _ in range(num_cars)]
+    for _ in range(num_episodes):
+        junctions,roads,cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
+                                                    junc_pairs,car_speeds,car_lanes,car_goals,False)
+
+        #NOTE: Later on I will come back and put this into the constructEnvironment function. For now I just
+        # want results
+        cars[0].controller = controller
+        while canGo(cars):
+            for i,car in enumerate(cars):
+                car.sense()
+                next_states[i] = car.composeState()
+                car.controller.train(cur_states[i],next_states[i])
+            cur_states = list(next_states)
+            for car in cars:
+                car.move()
+
+    for car in cars:
+        car.controller.recordModel()
+
+
+
+
 def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
                   car_goals,run_graphics,debug,car_speeds=None,car_lanes=None):
     """This function runs the simulation given the specified parameters.
@@ -78,10 +123,8 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
     clock = 0
     runtime = 10.0
 
-    junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,\
-                                           road_lengths,junc_pairs)
-
-    cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes,car_goals,debug)
+    junctions,roads,cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,\
+                                                num_cars,car_speeds,car_lanes,car_goals,debug)
 
     if run_graphics:
         g_sim = graphic_simulator.GraphicSimulator(junctions,roads,cars)
@@ -93,9 +136,9 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
     t0 = time.time()
     while(clock<runtime):
         if debug: print("TIME: {}".format(clock))
-        for entry in cars:
-            entry.move(0,0)
-            entry.sense()
+        for car in cars:
+            car.sense()
+            car.move()
             if debug:
                 print("\nEnd Of Round Status Update:")
                 entry.printStatus()
@@ -122,7 +165,7 @@ if __name__ == "__main__":
     #3-road intersection
     num_junctions = 4
     num_roads = 3
-    num_cars = 5
+    num_cars = 1
 
     road_angles = [180,0,50]
     road_lengths = [30,30,30]
