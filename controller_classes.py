@@ -1,4 +1,7 @@
+import random
 import torch
+import torch.nn.functional as F
+from collections import namedtuple
 from torch import nn
 from torch.autograd import Variable
 
@@ -28,7 +31,7 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
-class DQN(nn.module):
+class DQN(nn.Module):
 
     def __init__(self,state_len,num_parti_accel,num_parti_angle):
         #Layers for the model
@@ -50,8 +53,8 @@ class DQN(nn.module):
             self.last_layers_accel.append(nn.ReLU(nn.Linear(state_len,state_len/2)))
             self.last_layers_angle.append(nn.ReLU(nn.Linear(state_len,state_len/2)))
             state_len = int(state_len/2)
-        self.last_layers_accel.append(nn.Softmax(nn.Linear(state_len,num_parti_accel)))
-        self.last_layers_angle.append(nn.Softmax(nn.Linear(state_len,num_parti_angle)))
+        self.last_layers_accel.append(nn.ReLU(nn.Linear(state_len,num_parti_accel)))
+        self.last_layers_angle.append(nn.ReLU(nn.Linear(state_len,num_parti_angle)))
 
 
     def forward(x):
@@ -62,57 +65,27 @@ class DQN(nn.module):
         for l_accel,l_angle in zip(self.last_layers_accel,self.last_layers_angle):
             y = l_accel(y)
             z = l_angle(z)
+        #Returns Q-values for all the accelerations and all the angular accelerations
         return y,z
 
 
-    def optimize_model():
-        if len(memory) < BATCH_SIZE:
-            return
-        transitions = memory.sample(BATCH_SIZE)
-        # Transpose the batch (see http://stackoverflow.com/a/19343/3343043 for
-        # detailed explanation).
-        batch = Transition(*zip(*transitions))
+class randomController():
 
-        # Compute a mask of non-final states and concatenate the batch elements
-        non_final_mask = ByteTensor(tuple(map(lambda s: s is not None,
-                                              batch.next_state)))
+    def __init__(self,accel_len,angle_len):
+        self.accel_len = accel_len
+        self.angle_len = angle_len
 
-        # We don't want to backprop through the expected action values and volatile
-        # will save us on temporarily changing the model parameters'
-        # requires_grad to False!
-        non_final_next_states = Variable(torch.cat([s for s in batch.next_state
-                                                   if s is not None]),volatile=True)
-        state_batch = Variable(torch.cat(batch.state))
-        action_batch = Variable(torch.cat(batch.action))
-        reward_batch = Variable(torch.cat(batch.reward))
+    def train(self,state,next_state):
+        pass
 
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of actions taken
-        state_action_values = model(state_batch).gather(1, action_batch)
-
-        # Compute V(s_{t+1}) for all next states.
-        next_state_values = Variable(torch.zeros(BATCH_SIZE).type(Tensor))
-        next_state_values[non_final_mask] = model(non_final_next_states).max(1)[0]
-        # Now, we don't want to mess up the loss with a volatile flag, so let's
-        # clear it. After this, we'll just end up with a Variable that has
-        # requires_grad=False
-        next_state_values.volatile = False
-        # Compute the expected Q values
-        expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-
-        # Compute Huber loss
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
-
-        # Optimize the model
-        optimizer.zero_grad()
-        loss.backward()
-        for param in model.parameters():
-            param.grad.data.clamp_(-1, 1)
-        optimizer.step()
+    def selectAction(self,state):
+        accel = random.randint(self.accel_len)
+        angle = random.randing(self.angle_len)
+        return accel,angle
 
 
 class Controller():
-    def __init__(self,state_len,num_partition_accel,num_partition_angle,behaviour="default"):
+    def __init__(self,state_len,num_partition_accel,num_partition_angle,behaviour):
         self.batch_size = 128
         self.gamma = .999
         self.eps_start = 0.9
@@ -123,9 +96,12 @@ class Controller():
         self.accel_len = num_partition_accel
         self.angle_len = num_partition_accel
 
+        self.accel = None
+        self.angle = None
+
         self.model = DQN(state_len,self.accel_len,self.angle_len)
         self.behaviour = behaviour
-        self.memory = memory = ReplayMemory(10000)
+        self.memory = ReplayMemory(10000)
 
 
     def selectAction(self,state):
@@ -169,44 +145,97 @@ class Controller():
         if not to_state[10]: reward += -3
         if to_state[9]: reward += -3
         if to_state[11]: reward += 3
+        #Reward is an integer
         return reward
 
 
-    def plot_durations():
-        plt.figure(2)
-        plt.clf()
-        durations_t = torch.FloatTensor(episode_durations)
-        plt.title('Training...')
-        plt.xlabel('Episode')
-        plt.ylabel('Duration')
-        plt.plot(durations_t.numpy())
-        # Take 100 episode averages and plot them too
-        if len(durations_t) >= 100:
-            means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-            means = torch.cat((torch.zeros(99), means))
-            plt.plot(means.numpy())
-
-        plt.pause(0.001)  # pause a bit so that plots are updated
-        display.display(plt.gcf())
+    #def plot_durations():
+    #    plt.figure(2)
+    #    plt.clf()
+    #    durations_t = torch.FloatTensor(episode_durations)
+    #    plt.title('Training...')
+    #    plt.xlabel('Episode')
+    #    plt.ylabel('Duration')
+    #    plt.plot(durations_t.numpy())
+    #    # Take 100 episode averages and plot them too
+    #    if len(durations_t) >= 100:
+    #        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
+    #        means = torch.cat((torch.zeros(99), means))
+    #        plt.plot(means.numpy())
+    #
+    #    plt.pause(0.001)  # pause a bit so that plots are updated
+    #    display.display(plt.gcf())
 
 
     def train(state,next_state):
         action = (self.accel,self.angle)
+        #Reward is an integer
         reward = self.computeReward(state,next_state)
-        reward = Tensor([reward])
+        #reward = Tensor([reward])
 
         # Store the transition in memory
+        # No Tensors here
         memory.push(state, action, next_state, reward)
 
         # Perform one step of the optimization (on the target network)
         optimize_model()
-                if done:
-                    episode_durations.append(t + 1)
-                    plot_durations()
-                    break
+        #        if done:
+        #            episode_durations.append(t + 1)
+        #            plot_durations()
+        #            break
 
-        print('Complete')
-        env.render(close=True)
-        env.close()
-        plt.ioff()
-        plt.show()
+        #print('Complete')
+        #env.render(close=True)
+        #env.close()
+        #plt.ioff()
+        #plt.show()
+
+
+    def optimize_model():
+        if len(memory) < BATCH_SIZE:
+            return
+        #Transitions here should be a list 
+        transitions = memory.sample(BATCH_SIZE)
+        print("This is type of transition: {}".format(type(transitions)))
+        # Transpose the batch (see http://stackoverflow.com/a/19343/3343043 for
+        # detailed explanation).
+        exit(-1)
+        batch = Transition(*zip(*transitions))
+        print("This is batch: {}".format(batch))
+
+        # Compute a mask of non-final states and concatenate the batch elements
+        non_final_mask = ByteTensor(tuple(map(lambda s: s is not None,
+                                              batch.next_state)))
+
+        # We don't want to backprop through the expected action values and volatile
+        # will save us on temporarily changing the model parameters'
+        # requires_grad to False!
+        non_final_next_states = Variable(torch.cat([s for s in batch.next_state
+                                                   if s is not None]),volatile=True)
+        state_batch = Variable(torch.cat(batch.state))
+        action_batch = Variable(torch.cat(batch.action))
+        reward_batch = Variable(torch.cat(batch.reward))
+
+        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+        # columns of actions taken
+        state_action_values = model(state_batch).gather(1, action_batch)
+
+        # Compute V(s_{t+1}) for all next states.
+        next_state_values = Variable(torch.zeros(BATCH_SIZE).type(Tensor))
+        next_state_values[non_final_mask] = model(non_final_next_states).max(1)[0]
+        # Now, we don't want to mess up the loss with a volatile flag, so let's
+        # clear it. After this, we'll just end up with a Variable that has
+        # requires_grad=False
+        next_state_values.volatile = False
+        # Compute the expected Q values
+        expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+
+        # Compute Huber loss
+        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
+
+        # Optimize the model
+        optimizer.zero_grad()
+        loss.backward()
+        for param in model.parameters():
+            param.grad.data.clamp_(-1, 1)
+        optimizer.step()

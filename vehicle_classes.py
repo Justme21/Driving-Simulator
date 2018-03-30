@@ -9,7 +9,7 @@ car_length = 4.17
 car_width = 1.7
 
 class Car():
-    def __init__(self,road,is_top_lane,v,is_ego,label,debug,controller=None,timestep=.1):
+    def __init__(self,road,is_top_lane,v,is_ego,label,debug,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -67,12 +67,7 @@ class Car():
         #Initialise the position, velocity and heading features
         self.initSetup(road,v,is_top_lane)
 
-        #Initilaising the Controller
-        if controller is not None:
-            self.controller = controller
-        else:
-            self.controller = controller_classes.randomController()
-
+        self.controller = None
         #Initialise time. Used to record how long it takes to achieve an objective
         self.time = 0
 
@@ -161,6 +156,8 @@ class Car():
         #      reasonable and not just arbitrarily selected.
         self.v = v #19.8km/h units are metres per second 
 
+
+    def loadController(self,state_len, num_accel_parti,num_angle_parti, behaviour)
 
     def composeState():
         return self.pub_state+self.priv_state

@@ -79,17 +79,25 @@ def canGo(cars):
 
 
 def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                car_goals,car_speeds,car_lanes,controller):
+                car_goals,controllers,num_accel_parti,num_angle_parti,car_speeds=None,car_lanes=None):
+
+    state_len = None
 
     cur_states = [None for _ in range(num_cars)]
     next_states = [None for _ in range(num_cars)]
+
+    if not isinstance(controllers, list): controllers = [controllers]
+    controllers += [None for _ in range(num_cars-len(controllers))]
+
     for _ in range(num_episodes):
         junctions,roads,cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
-                                                    junc_pairs,car_speeds,car_lanes,car_goals,False)
+                                                    junc_pairs,num_cars,car_speeds,car_lanes,car_goals,False)
 
-        #NOTE: Later on I will come back and put this into the constructEnvironment function. For now I just
-        # want results
-        cars[0].controller = controller
+        if state_len is None:
+            cars[0].sense()
+            state_len = len(cars[0].composeState())
+        for car,controller in zip(cars,controllers): car.loadContoller(state_len,num_accel_parti,\
+                                                                       num_angle_parti,controller)
         while canGo(cars):
             for i,car in enumerate(cars):
                 car.sense()
@@ -178,5 +186,10 @@ if __name__ == "__main__":
 
     run_graphics = True
     debug = False
-    runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  car_goals,run_graphics,debug)
+
+    num_episodes = 1
+    controllers = ["safe"]
+    #runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
+    #              car_goals,run_graphics,debug)
+    runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
+                  car_goals,controllers)
