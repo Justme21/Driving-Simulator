@@ -75,6 +75,8 @@ class randomController():
         self.accel_len = accel_len
         self.angle_len = angle_len
 
+        self.model = -1 #Token value that is not None
+
     def train(self,state,next_state):
         pass
 
@@ -85,7 +87,7 @@ class randomController():
 
 
 class Controller():
-    def __init__(self,state_len,num_partition_accel,num_partition_angle,behaviour):
+    def __init__(self,behaviour,accel_cats,angle_cats):
         self.batch_size = 128
         self.gamma = .999
         self.eps_start = 0.9
@@ -93,15 +95,20 @@ class Controller():
         self.eps_decay = 200
 
         self.num_steps = 0
-        self.accel_len = num_partition_accel
-        self.angle_len = num_partition_accel
+
+        self.accel_ranges = accel_cats
+        self.angle_ranges = angle_cats
 
         self.accel = None
         self.angle = None
 
-        self.model = DQN(state_len,self.accel_len,self.angle_len)
+        self.model = None
         self.behaviour = behaviour
         self.memory = ReplayMemory(10000)
+
+
+    def initialiseModel(self,state_len):
+        self.model = DQN(state_len,len(self.accel_ranges),len(self.angle_ranges))
 
 
     def selectAction(self,state):

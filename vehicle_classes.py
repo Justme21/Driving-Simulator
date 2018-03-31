@@ -9,7 +9,7 @@ car_length = 4.17
 car_width = 1.7
 
 class Car():
-    def __init__(self,road,is_top_lane,v,is_ego,label,debug,timestep=.1):
+    def __init__(self,controller,is_ego,label,debug,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -51,11 +51,10 @@ class Car():
 
         self.label = "C{}".format(label)
 
-        #Initialise Trajectory and Waypoint
-        self.traj_posit = 0
-        self.trajectory,self.waypoints = initialiseTrajectory(road,is_top_lane)
-        if self.debug:
-            print("{} has TRAJECTORY: {}".format(self.label,[x.label for x in self.traj]))
+        #Trajectory and Waypoint
+        self.traj_posit = None
+        self.trajectory = None
+        self.waypoints = None
 
         #Initialise Public and Private State
         self.pub_state = None
@@ -65,9 +64,9 @@ class Car():
         self.public_state_repo = []
 
         #Initialise the position, velocity and heading features
-        self.initSetup(road,v,is_top_lane)
+        #self.initSetup(road,v,is_top_lane)
 
-        self.controller = None
+        self.controller = controller
         #Initialise time. Used to record how long it takes to achieve an objective
         self.time = 0
 
@@ -156,10 +155,14 @@ class Car():
         #      reasonable and not just arbitrarily selected.
         self.v = v #19.8km/h units are metres per second 
 
+        #Initialise Trajectory and Waypoint
+        self.traj_posit = 0
+        self.trajectory,self.waypoints = initialiseTrajectory(road,is_top_lane)
+        if self.debug:
+            print("{} has TRAJECTORY: {}".format(self.label,[x.label for x in self.traj]))
 
-    def loadController(self,state_len, num_accel_parti,num_angle_parti, behaviour)
 
-    def composeState():
+    def composeState(self):
         return self.pub_state+self.priv_state
 
 
@@ -340,7 +343,7 @@ class Car():
             on = entry
             if isinstance(on,road_classes.Lane):
                 on = on.road
-            if on is self.trajectory(self.traj_posit):
+            if on is self.trajectory[self.traj_posit]:
                 self.traj_posit += 1
                 break
         if self.traj_posit == len(self.trajectory): self.is_complete = True
@@ -411,6 +414,8 @@ class Car():
         state.append(self.on_road)
         state.append(self.is_complete)
 
+        self.priv_state = state
+
 
     def sense(self):
         """Change the sense variables to match the vehicle's new position/capture
@@ -421,6 +426,7 @@ class Car():
         self.updatePublicState()
         #Update the Private state values
         self.updatePrivateState()
+        if self.controller.model is None: self.controller.initialiseModel(len(self.composeState()))
 
 
     def printStatus(self,mod=""):

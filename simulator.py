@@ -37,10 +37,9 @@ def listFixer(target_list,good_dim,bound_low,bound_high):
     return target_list
 
 
-def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None,car_goals=None,debug=True):
+def putCarsOnMap(cars,roads,car_speeds=None,car_lanes=None):
     """Constructs the car objects and assigns them coordinates that puts them on either
        specified lanes or else randomly chooses lanes to put them on."""
-    cars = []
     lane = None
 
     #car_lanes is the parameter that specifies what lanes the cars should be put in
@@ -53,22 +52,19 @@ def putCarsOnMap(roads,num_cars,car_speeds=None,car_lanes=None,car_goals=None,de
     # the car should be placed. Once initialised with this information the Car object
     # will give itself a random location on the specified lane with the same heading as
     # the lane.
-    is_ego = True #We want the first car placed to be ego, and all other cars to not be ego
-    for i,entry in enumerate(car_lanes):
-        cars.append(vehicle_classes.Car(roads[car_lanes[i][0]],car_lanes[i][1],\
-                    car_speeds[i],is_ego,i,debug))
-        is_ego = False
+    for i,car in enumerate(cars):
+        car.initSetup(roads[car_lanes[i][0]],car_lanes[i][1],car_speeds[i])
     return cars
 
 
 def constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,\
-                         num_cars,car_speeds,car_lanes,car_goals,debug):
+                         cars,car_speeds,car_lanes,debug):
 
     junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,\
                                            road_lengths,junc_pairs)
 
-    cars = putCarsOnMap(roads,num_cars,car_speeds,car_lanes,car_goals,debug)
-    return junctions,roads_cars
+    cars = putCarsOnMap(cars,roads,car_speeds,car_lanes)
+    return junctions,roads,cars
 
 
 def canGo(cars):
@@ -78,26 +74,29 @@ def canGo(cars):
     return True
 
 
-def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                car_goals,controllers,num_accel_parti,num_angle_parti,car_speeds=None,car_lanes=None):
+def initialiseCars(num_cars,controllers,debug):
+    cars = []
+    controllers += [controller_classes.RandomController() for _ in range(num_cars-len(controllers))]
+    is_ego = True
+    for i in range(num_cars):
+        cars.append(vehicle_classes.Car(controllers[i],is_ego,i,debug))
+        is_ego = False
+    return cars
 
-    state_len = None
+
+def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
+                car_goals,controllers,debug,car_speeds=None,car_lanes=None):
 
     cur_states = [None for _ in range(num_cars)]
     next_states = [None for _ in range(num_cars)]
 
-    if not isinstance(controllers, list): controllers = [controllers]
-    controllers += [None for _ in range(num_cars-len(controllers))]
+    cars = initialiseCars(num_cars,controllers,debug)
 
     for _ in range(num_episodes):
         junctions,roads,cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
-                                                    junc_pairs,num_cars,car_speeds,car_lanes,car_goals,False)
+                                                    junc_pairs,cars,car_speeds,car_lanes,debug)
 
-        if state_len is None:
-            cars[0].sense()
-            state_len = len(cars[0].composeState())
-        for car,controller in zip(cars,controllers): car.loadContoller(state_len,num_accel_parti,\
-                                                                       num_angle_parti,controller)
+
         while canGo(cars):
             for i,car in enumerate(cars):
                 car.sense()
@@ -109,8 +108,6 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
 
     for car in cars:
         car.controller.recordModel()
-
-
 
 
 def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
@@ -188,8 +185,10 @@ if __name__ == "__main__":
     debug = False
 
     num_episodes = 1
-    controllers = ["safe"]
+    accel_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
+    angle_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
+    controllers = [controller_classes.Controller("safe",accel_cats,angle_cats)]
     #runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
     #              car_goals,run_graphics,debug)
     runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  car_goals,controllers)
+                  car_goals,controllers,debug)
