@@ -23,7 +23,7 @@ class Car():
         #Velocity and accelerations of the car of the car
         self.v = None
         self.accel = 0
-        self.angle_accel = 0
+        self.turn_accel = 0
 
         #Heading of the car (direction it is facing in degrees)
         self.heading = None
@@ -167,23 +167,26 @@ class Car():
 
 
     def chooseAction(self):
+        # It is possibly unnecessary to recompose the state when the simulator already
+        # composed it, but it is a reasonably simple operation so it is not worth
+        # stressing over
         state = self.composeState()
-        accel_cat,angle_cat = self.controller.selectAction(state)
+        self.accel,self.turn_accel = self.controller.selectAction(state)
 
     def move(self):
         """The motion dynamics of the vehicle. Given an input acceleration and wheel-
            angle this determines how much the vehicle should move, and then resets the
            vehicles coordinates appropriately."""
 
-        accel,turn_angle = self.chooseAction()
+        #accel,turn_angle = self.chooseAction()
         #The changes induced by the dynamics
         x_dot = self.v*math.cos(math.radians(self.heading))
         #y_dot is set as negative to reflect the fact the pygame coordinate space
         y_dot = -self.v*math.sin(math.radians(self.heading))
         #x_dot = self.v*math.cos(math.radians(turn_angle))
         #y_dot = self.v*math.sin(math.radians(turn_angle))
-        head_dot = turn_angle
-        v_dot = accel
+        head_dot = self.turn_accel
+        v_dot = self.accel
 
         #Applying the changes calculated above
         self.y_com += self.timestep*y_dot
@@ -365,7 +368,17 @@ class Car():
         i = 0
         while i<len(self.on) and not (isinstance(self.on[i],road_classes.Lane) or\
                    isinstance(self.on[i],road_classes.Junction)): i+=1
-        beta = self.on[i].direction
+        if i == len(self.on):
+            print("No Road/Junction found in on: ")
+            print("Car is: {}".format(self.printStatus()))
+            print("Self.on:")
+            for entry in self.on:
+                print("\t{}".format(entry.printStatus()))
+            print("")
+            #exit(-1)
+            beta = alpha
+        else:
+            beta = self.on[i].direction
         v_par = self.v*math.cos(math.radians(alpha-beta))
         v_perp = self.v*math.sin(math.radians(alpha-beta))
         state += [v_par,v_perp]
@@ -395,7 +408,7 @@ class Car():
             state.append(math.fabs(ego_com[0]-obj.four_corners["back_right"][0]))
             state.append(math.fabs(ego_com[0]-obj.four_corners["back_left"][0]))
         else:
-            slope = math.tan(obj.heading)
+            slope = math.tan(obj.direction)
             coord_right = obj.four_corners["back_right"]
             coord_left = obj.four_corners["back_left"]
             #Formula for perpendicular distance between point and a line in form Ax+By+C
@@ -408,11 +421,11 @@ class Car():
 
         #The current acceleration and angular acceleration
         state.append(self.accel)
-        state.append(self.angle_accel)
+        state.append(self.turn_accel)
         #Whether or not the car has crashed and whether or not it is still on the road
-        state.append(self.crashed)
-        state.append(self.on_road)
-        state.append(self.is_complete)
+        state.append(int(self.crashed))
+        state.append(int(self.on_road))
+        state.append(int(self.is_complete))
 
         self.priv_state = state
 
@@ -426,6 +439,8 @@ class Car():
         self.updatePublicState()
         #Update the Private state values
         self.updatePrivateState()
+        print("THIS IS SENSED STATE: {}-{}".format(self.pub_state,self.priv_state))
+        #exit(-1)
         if self.controller.model is None: self.controller.initialiseModel(len(self.composeState()))
 
 

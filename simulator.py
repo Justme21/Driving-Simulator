@@ -96,6 +96,12 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
         junctions,roads,cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
                                                     junc_pairs,cars,car_speeds,car_lanes,debug)
 
+        for i,car in enumerate(cars):
+            car.sense()
+            cur_states[i] = car.composeState()
+        for car in cars:
+            car.chooseAction()
+            car.move()
 
         while canGo(cars):
             for i,car in enumerate(cars):
@@ -104,6 +110,7 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
                 car.controller.train(cur_states[i],next_states[i])
             cur_states = list(next_states)
             for car in cars:
+                car.chooseAction()
                 car.move()
 
     for car in cars:
@@ -184,7 +191,7 @@ if __name__ == "__main__":
     run_graphics = True
     debug = False
 
-    num_episodes = 1
+    num_episodes = 10
     accel_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
     angle_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
     controllers = [controller_classes.Controller("safe",accel_cats,angle_cats)]

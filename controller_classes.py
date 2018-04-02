@@ -1,3 +1,5 @@
+import math
+import numpy as np
 import random
 import torch
 import torch.nn.functional as F
@@ -5,7 +7,7 @@ from collections import namedtuple
 from torch import nn
 from torch.autograd import Variable
 
-
+BATCH_SIZE = 128
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
@@ -35,6 +37,7 @@ class DQN(nn.Module):
 
     def __init__(self,state_len,num_parti_accel,num_parti_angle):
         #Layers for the model
+        super(DQN,self).__init__()
         self.layer_list = None
         self.last_layers_accel = None
         self.last_layers_angle = None
@@ -42,29 +45,35 @@ class DQN(nn.Module):
 
 
     def initialiseLayers(self,state_len,num_parti_accel,num_parti_angle):
+        state_len = int(state_len)
         self.layer_list = []
         while state_len>max(20,num_parti_accel,num_parti_angle):
-            self.layer_list.append(nn.ReLU(nn.Linear(state_len,int(state_len/2))))
+            self.layer_list.append(nn.Linear(state_len,int(state_len/2)))
             state_len= int(state_len/2)
 
         self.last_layers_accel = []
         self.last_layers_angle = []
         while state_len>max(num_parti_accel,num_parti_angle):
-            self.last_layers_accel.append(nn.ReLU(nn.Linear(state_len,state_len/2)))
-            self.last_layers_angle.append(nn.ReLU(nn.Linear(state_len,state_len/2)))
+            self.last_layers_accel.append(nn.Linear(state_len,int(state_len/2)))
+            self.last_layers_angle.append(nn.Linear(state_len,int(state_len/2)))
             state_len = int(state_len/2)
-        self.last_layers_accel.append(nn.ReLU(nn.Linear(state_len,num_parti_accel)))
-        self.last_layers_angle.append(nn.ReLU(nn.Linear(state_len,num_parti_angle)))
+        self.last_layers_accel.append(nn.Linear(state_len,num_parti_accel))
+        self.last_layers_angle.append(nn.Linear(state_len,num_parti_angle))
 
 
-    def forward(x):
+    def forward(self,x):
         for layer in self.layer_list:
             x = layer(x)
+            x = F.relu(x)
         y = x
         z = x
         for l_accel,l_angle in zip(self.last_layers_accel,self.last_layers_angle):
             y = l_accel(y)
             z = l_angle(z)
+            if l_accel != self.last_layers_accel[-1]:
+                y = F.relu(y)
+                z = F.relu(z)
+
         #Returns Q-values for all the accelerations and all the angular accelerations
         return y,z
 
@@ -82,13 +91,12 @@ class randomController():
 
     def selectAction(self,state):
         accel = random.randint(self.accel_len)
-        angle = random.randing(self.angle_len)
+        angle = random.randint(self.angle_len)
         return accel,angle
 
 
 class Controller():
     def __init__(self,behaviour,accel_cats,angle_cats):
-        self.batch_size = 128
         self.gamma = .999
         self.eps_start = 0.9
         self.eps_end = .05
@@ -96,11 +104,11 @@ class Controller():
 
         self.num_steps = 0
 
-        self.accel_ranges = accel_cats
-        self.angle_ranges = angle_cats
-
         self.accel = None
         self.angle = None
+
+        self.accel_ranges = accel_cats
+        self.angle_ranges = angle_cats
 
         self.model = None
         self.behaviour = behaviour
@@ -118,16 +126,15 @@ class Controller():
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(-1.*self.num_steps/self.eps_decay)
         self.num_steps += 1
         if sample > eps_threshold:
-            accel,angle = self.model(Variable(state, volatile=True))
-            accel = np.argmax(accel.data)
-            angle = np.argmax(angle.data)
+            accel,angle = self.model(Variable(torch.from_numpy(state).float(), volatile=True))
+            accel_cat = np.argmax(accel.data)
+            angle_cat = np.argmax(angle.data)
         else:
-            accel = random.randint(self.accel_len)
-            angle = random.randint(self.angle_len)
-        self.num_steps += 1
-        self.accel = accel
-        self.angle = angle
-        return accel,angle
+            accel_cat = random.randint(0,len(self.accel_ranges)-1)
+            angle_cat = random.randint(0,len(self.angle_ranges)-1)
+        self.accel = np.random.uniform(self.accel_ranges[accel_cat][0],self.accel_ranges[accel_cat][1])
+        self.angle = np.random.uniform(self.angle_ranges[angle_cat][0],self.angle_ranges[angle_cat][1])
+        return self.accel,self.angle
 
 
     def computeReward(self,from_state,to_state):
@@ -174,18 +181,21 @@ class Controller():
     #    display.display(plt.gcf())
 
 
-    def train(state,next_state):
-        action = (self.accel,self.angle)
+    def train(self,state,next_state):
+        action = torch.Tensor((self.accel,self.angle))
         #Reward is an integer
         reward = self.computeReward(state,next_state)
-        #reward = Tensor([reward])
+
+        state = torch.Tensor(state)
+        next_state = torch.Tensor(next_state)
+        reward = torch.Tensor([reward])
 
         # Store the transition in memory
         # No Tensors here
-        memory.push(state, action, next_state, reward)
+        self.memory.push(state, action, next_state, reward)
 
         # Perform one step of the optimization (on the target network)
-        optimize_model()
+        self.optimize_model()
         #        if done:
         #            episode_durations.append(t + 1)
         #            plot_durations()
@@ -198,20 +208,17 @@ class Controller():
         #plt.show()
 
 
-    def optimize_model():
-        if len(memory) < BATCH_SIZE:
+    def optimize_model(self):
+        if len(self.memory) < BATCH_SIZE:
             return
         #Transitions here should be a list 
-        transitions = memory.sample(BATCH_SIZE)
-        print("This is type of transition: {}".format(type(transitions)))
+        transitions = self.memory.sample(BATCH_SIZE)
         # Transpose the batch (see http://stackoverflow.com/a/19343/3343043 for
         # detailed explanation).
-        exit(-1)
         batch = Transition(*zip(*transitions))
-        print("This is batch: {}".format(batch))
 
         # Compute a mask of non-final states and concatenate the batch elements
-        non_final_mask = ByteTensor(tuple(map(lambda s: s is not None,
+        non_final_mask = torch.ByteTensor(tuple(map(lambda s: s is not None,
                                               batch.next_state)))
 
         # We don't want to backprop through the expected action values and volatile
@@ -225,11 +232,11 @@ class Controller():
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken
-        state_action_values = model(state_batch).gather(1, action_batch)
+        state_action_values = self.model(state_batch).gather(1, action_batch)
 
         # Compute V(s_{t+1}) for all next states.
         next_state_values = Variable(torch.zeros(BATCH_SIZE).type(Tensor))
-        next_state_values[non_final_mask] = model(non_final_next_states).max(1)[0]
+        next_state_values[non_final_mask] = self.model(non_final_next_states).max(1)[0]
         # Now, we don't want to mess up the loss with a volatile flag, so let's
         # clear it. After this, we'll just end up with a Variable that has
         # requires_grad=False
