@@ -74,9 +74,9 @@ def canGo(cars):
     return True
 
 
-def initialiseCars(num_cars,controllers,debug):
+def initialiseCars(num_cars,controllers,accel_cats,angle_cats,debug):
     cars = []
-    controllers += [controller_classes.RandomController() for _ in range(num_cars-len(controllers))]
+    controllers += [controller_classes.RandomController(accel_cats,angle_cats) for _ in range(num_cars-len(controllers))]
     is_ego = True
     for i in range(num_cars):
         cars.append(vehicle_classes.Car(controllers[i],is_ego,i,debug))
@@ -85,16 +85,19 @@ def initialiseCars(num_cars,controllers,debug):
 
 
 def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                car_goals,controllers,debug,car_speeds=None,car_lanes=None):
+                car_goals,controllers,accel_cats,angle_cats,run_graphics,debug,car_speeds=None,car_lanes=None):
 
     cur_states = [None for _ in range(num_cars)]
     next_states = [None for _ in range(num_cars)]
 
-    cars = initialiseCars(num_cars,controllers,debug)
+    cars = initialiseCars(num_cars,controllers,accel_cats,angle_cats,debug)
 
     for _ in range(num_episodes):
         junctions,roads,cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
                                                     junc_pairs,cars,car_speeds,car_lanes,debug)
+
+        if run_graphics:
+            g_sim = graphic_simulator.GraphicSimulator(junctions,roads,cars)
 
         for i,car in enumerate(cars):
             car.sense()
@@ -112,6 +115,12 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
             for car in cars:
                 car.chooseAction()
                 car.move()
+            if run_graphics:
+                g_sim.update()
+
+        if run_graphics:
+            time.sleep(5)
+            g_sim.shutdown()
 
     for car in cars:
         car.controller.recordModel()
@@ -188,14 +197,15 @@ if __name__ == "__main__":
     car_lanes = [(0,1),(1,1)]
     car_goals = [0,3,3,3,3]
 
-    run_graphics = True
+    run_graphics = False
     debug = False
 
-    num_episodes = 10
+    num_episodes = 3
     accel_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
     angle_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
+    #controllers = []
     controllers = [controller_classes.Controller("safe",accel_cats,angle_cats)]
     #runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
     #              car_goals,run_graphics,debug)
     runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  car_goals,controllers,debug)
+                  car_goals,controllers,accel_cats,angle_cats,run_graphics,debug)

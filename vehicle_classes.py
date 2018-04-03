@@ -124,6 +124,8 @@ class Car():
             lane = road.bottom_down_lane
 
         self.on_road = True #on_road is false if we run off the road
+        self.crashed = False
+        self.is_complete = False
 
         #For simplicity we assume the car starts at the centre of the road, heading
         # parallel to the course of the road
@@ -353,6 +355,7 @@ class Car():
         if self.is_complete and not self.is_ego:
             next_lane = random.choice(on.out_lanes)
             self.trajectory,self.waypoints = initialiseTrajectory(next_lane,next_lane.is_top_up)
+            self.traj_posit = 0
             self.is_complete = False
 
 
@@ -439,7 +442,7 @@ class Car():
         self.updatePublicState()
         #Update the Private state values
         self.updatePrivateState()
-        print("THIS IS SENSED STATE: {}-{}".format(self.pub_state,self.priv_state))
+        #print("THIS IS SENSED STATE: {}-{}".format(self.pub_state,self.priv_state))
         #exit(-1)
         if self.controller.model is None: self.controller.initialiseModel(len(self.composeState()))
 

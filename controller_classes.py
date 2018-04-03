@@ -78,20 +78,24 @@ class DQN(nn.Module):
         return y,z
 
 
-class randomController():
+class RandomController():
 
-    def __init__(self,accel_len,angle_len):
-        self.accel_len = accel_len
-        self.angle_len = angle_len
+    def __init__(self,accel_cats,angle_cats):
+        self.model = -1 #Token value to make compatible with standard controller
 
-        self.model = -1 #Token value that is not None
+        self.accel_ranges = accel_cats
+        self.angle_ranges = angle_cats
+
 
     def train(self,state,next_state):
         pass
 
+
     def selectAction(self,state):
-        accel = random.randint(self.accel_len)
-        angle = random.randint(self.angle_len)
+        accel_cat = random.randint(0,len(self.accel_ranges)-1)
+        angle_cat = random.randint(0,len(self.angle_ranges)-1)
+        accel = np.random.uniform(self.accel_ranges[accel_cat][0],self.accel_ranges[accel_cat][1])
+        angle = np.random.uniform(self.angle_ranges[angle_cat][0],self.angle_ranges[angle_cat][1])
         return accel,angle
 
 
@@ -120,21 +124,23 @@ class Controller():
 
 
     def selectAction(self,state):
-        if not isinstance(state,np.ndarray):
-            state = np.asarray(state)
+        if not isinstance(state,torch.Tensor):
+            state = torch.Tensor([state])
         sample = random.random()
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(-1.*self.num_steps/self.eps_decay)
         self.num_steps += 1
         if sample > eps_threshold:
-            accel,angle = self.model(Variable(torch.from_numpy(state).float(), volatile=True))
+            accel,angle = self.model(Variable(state, volatile=True))
             accel_cat = np.argmax(accel.data)
             angle_cat = np.argmax(angle.data)
         else:
             accel_cat = random.randint(0,len(self.accel_ranges)-1)
             angle_cat = random.randint(0,len(self.angle_ranges)-1)
-        self.accel = np.random.uniform(self.accel_ranges[accel_cat][0],self.accel_ranges[accel_cat][1])
-        self.angle = np.random.uniform(self.angle_ranges[angle_cat][0],self.angle_ranges[angle_cat][1])
-        return self.accel,self.angle
+        self.accel  = accel_cat
+        self.angle = angle_cat
+        accel = np.random.uniform(self.accel_ranges[accel_cat][0],self.accel_ranges[accel_cat][1])
+        angle = np.random.uniform(self.angle_ranges[angle_cat][0],self.angle_ranges[angle_cat][1])
+        return accel,angle
 
 
     def computeReward(self,from_state,to_state):
@@ -182,16 +188,16 @@ class Controller():
 
 
     def train(self,state,next_state):
-        action = torch.Tensor((self.accel,self.angle))
+        #self.accel and self.angle are integers indicating chosen action and angle
+        action = torch.Tensor([[self.accel,self.angle]])
         #Reward is an integer
         reward = self.computeReward(state,next_state)
 
-        state = torch.Tensor(state)
-        next_state = torch.Tensor(next_state)
+        state = torch.Tensor([state])
+        next_state = torch.Tensor([next_state])
         reward = torch.Tensor([reward])
 
         # Store the transition in memory
-        # No Tensors here
         self.memory.push(state, action, next_state, reward)
 
         # Perform one step of the optimization (on the target network)
@@ -230,13 +236,22 @@ class Controller():
         action_batch = Variable(torch.cat(batch.action))
         reward_batch = Variable(torch.cat(batch.reward))
 
+        #print("HERE {}".format(action_batch.size()))
+        #exit(-1)
+
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken
-        state_action_values = self.model(state_batch).gather(1, action_batch)
+        accel_q_values, angle_q_values  = self.model(state_batch)#.gather(1, action_batch)
+        chosen_accels = accel_q_values.gather(1,action_batch[:,0].long().view(-1,1))
+        chosen_angles = angle_q_values.gather(1,action_batch[:,1].long().view(-1,1))
+
 
         # Compute V(s_{t+1}) for all next states.
-        next_state_values = Variable(torch.zeros(BATCH_SIZE).type(Tensor))
-        next_state_values[non_final_mask] = self.model(non_final_next_states).max(1)[0]
+        accel_next_state_values = Variable(torch.zeros(BATCH_SIZE).type(torch.Tensor))
+        angle_next_state_values = Variable(torch.zeros(BATCH_SIZE).type(torch.Tensor))
+        (accel_next_state_values[non_final_mask],angle_next_state_values[non_final_mask]) = self.model(non_final_next_states)
+        accel_next_state_values[non_final_mask] = accel_next_state_values[non_final_mask].max(1)[0]
+        angle_next_state_values[non_final_mask] = angle_next_state_values[non_final_mask].max(1)[0]
         # Now, we don't want to mess up the loss with a volatile flag, so let's
         # clear it. After this, we'll just end up with a Variable that has
         # requires_grad=False

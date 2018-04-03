@@ -8,14 +8,14 @@ class GraphicSimulator():
     def __init__(self,junctions,roads,cars):
         #Initialise the pygame instance
         pygame.init()
-        
+
         #The height and width of the screen pygame opens (in pixels)
         height = 640
         width = 1024
 
         #Define the unit value to ensure the graphic doesn't go off the screen
         self.unit = setUnitVal(junctions,height,width)
-       
+
         #Initialise the sprite groups for the junctions, the roads and the cars 
         self.junc_list = makeSpriteGroup(junctions,width,height,self.unit)
         self.road_list = makeSpriteGroup(roads,width,height,self.unit)
@@ -23,7 +23,7 @@ class GraphicSimulator():
 
         #This is true if pygame detects that x button is clicked.
         # If true then graphic will close but simulation will continue to run
-        self.is_quit = False 
+        self.is_quit = False
 
         #Initialise the background and the screen that the graphics get written onto
         self.initialiseBackground(width,height)
@@ -85,6 +85,11 @@ class GraphicSimulator():
     def drawToScreen(self,obj_list):
         """Draws the sprites stored in the sprite group "obj_list" onto the screen"""
         obj_list.draw(self.screen)
+
+
+    def shutdown(self):
+        pygame.quit()
+        self.is_quit = True
 
 
     def checkForQuit(self):
