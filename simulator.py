@@ -21,6 +21,7 @@ def listFixer(target_list,good_dim,bound_low,bound_high):
         bound_high: - same as bound_low but with upper bound values"""
     if target_list is None:
         target_list = []
+
     if len(target_list) < good_dim[0]:
         print("Insufficient Number of Coordinates Provided")
         while len(target_list) < good_dim[0]:
@@ -62,6 +63,7 @@ def constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,junc_p
 
     junctions,roads = map_builder.buildMap(num_junctions,num_roads,road_angles,\
                                            road_lengths,junc_pairs)
+
 
     cars = putCarsOnMap(cars,roads,car_speeds,car_lanes)
     return junctions,roads,cars
@@ -184,20 +186,20 @@ if __name__ == "__main__":
     #junc_pairs = [(0,1),(1,2),(3,2),(4,1),(5,0),(4,3),(5,4)]
 
     #3-road intersection
-    num_junctions = 4
-    num_roads = 3
+    num_junctions = 5
+    num_roads = 4
     num_cars = 1
 
-    road_angles = [180,0,50]
-    road_lengths = [30,30,30]
+    road_angles = [180,180,90,90]
+    road_lengths = [30,30,30,30]
 
-    junc_pairs = [(0,3),(3,1),(2,3)]
+    junc_pairs = [(0,1),(1,2),(3,1),(1,4)]
 
-    car_speeds = [5.5,0]
-    car_lanes = [(0,1),(1,1)]
+    car_speeds = [5.5]
+    car_lanes = [(0,1)]
     car_goals = [0,3,3,3,3]
 
-    run_graphics = False
+    run_graphics = True
     debug = False
 
     num_episodes = 3
@@ -208,4 +210,4 @@ if __name__ == "__main__":
     #runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
     #              car_goals,run_graphics,debug)
     runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  car_goals,controllers,accel_cats,angle_cats,run_graphics,debug)
+                  car_goals,controllers,accel_cats,angle_cats,run_graphics,debug,car_speeds,car_lanes)

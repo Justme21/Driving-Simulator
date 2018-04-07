@@ -60,6 +60,10 @@ class DQN(nn.Module):
         self.last_layers_accel.append(nn.Linear(state_len,num_parti_accel))
         self.last_layers_angle.append(nn.Linear(state_len,num_parti_angle))
 
+        self.layer_list = nn.ModuleList(self.layer_list)
+        self.last_layers_accel = nn.ModuleList(self.last_layers_accel)
+        self.last_layers_angle = nn.ModuleList(self.last_layers_angle)
+
 
     def forward(self,x):
         for layer in self.layer_list:
@@ -115,12 +119,16 @@ class Controller():
         self.angle_ranges = angle_cats
 
         self.model = None
+        self.target_model = None
         self.behaviour = behaviour
         self.memory = ReplayMemory(10000)
-
+        self.optimizer = None
 
     def initialiseModel(self,state_len):
         self.model = DQN(state_len,len(self.accel_ranges),len(self.angle_ranges))
+        self.target_model = DQN(state_len,len(self.accel_ranges),len(self.angle_ranges))
+        self.target_model.load_state_dict(self.model.state_dict())
+        self.optimizer = torch.optim.RMSprop(self.model.parameters())
 
 
     def selectAction(self,state):
@@ -217,15 +225,11 @@ class Controller():
     def optimize_model(self):
         if len(self.memory) < BATCH_SIZE:
             return
-        #Transitions here should be a list 
+        #Transitions heire should be a list 
         transitions = self.memory.sample(BATCH_SIZE)
         # Transpose the batch (see http://stackoverflow.com/a/19343/3343043 for
         # detailed explanation).
         batch = Transition(*zip(*transitions))
-
-        # Compute a mask of non-final states and concatenate the batch elements
-        non_final_mask = torch.ByteTensor(tuple(map(lambda s: s is not None,
-                                              batch.next_state)))
 
         # We don't want to backprop through the expected action values and volatile
         # will save us on temporarily changing the model parameters'
@@ -235,9 +239,6 @@ class Controller():
         state_batch = Variable(torch.cat(batch.state))
         action_batch = Variable(torch.cat(batch.action))
         reward_batch = Variable(torch.cat(batch.reward))
-
-        #print("HERE {}".format(action_batch.size()))
-        #exit(-1)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken
@@ -249,22 +250,27 @@ class Controller():
         # Compute V(s_{t+1}) for all next states.
         accel_next_state_values = Variable(torch.zeros(BATCH_SIZE).type(torch.Tensor))
         angle_next_state_values = Variable(torch.zeros(BATCH_SIZE).type(torch.Tensor))
-        (accel_next_state_values[non_final_mask],angle_next_state_values[non_final_mask]) = self.model(non_final_next_states)
-        accel_next_state_values[non_final_mask] = accel_next_state_values[non_final_mask].max(1)[0]
-        angle_next_state_values[non_final_mask] = angle_next_state_values[non_final_mask].max(1)[0]
+        #accel_next_state_values[non_final_mask],angle_next_state_values[non_final_mask] = self.model(non_final_next_states)
+        accel_next_state_values,angle_next_state_values = self.target_model(non_final_next_states)
+        accel_next_state_values = accel_next_state_values.max(1)[0]
+        angle_next_state_values = angle_next_state_values.max(1)[0]
         # Now, we don't want to mess up the loss with a volatile flag, so let's
         # clear it. After this, we'll just end up with a Variable that has
         # requires_grad=False
-        next_state_values.volatile = False
+        accel_next_state_values.volatile = False
+        angle_next_state_values.volatile = False
         # Compute the expected Q values
-        expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+        expected_accel_state_action_values = (accel_next_state_values * self.gamma) + reward_batch
+        expected_angle_state_action_values = (angle_next_state_values * self.gamma) + reward_batch
 
         # Compute Huber loss
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
+        accel_loss = F.smooth_l1_loss(chosen_accels, expected_accel_state_action_values)
+        angle_loss = F.smooth_l1_loss(chosen_angles, expected_angle_state_action_values)
 
         # Optimize the model
-        optimizer.zero_grad()
-        loss.backward()
-        for param in model.parameters():
+        self.optimizer.zero_grad()
+        accel_loss.backward()
+        angle_loss.backward()
+        for param in self.model.parameters():
             param.grad.data.clamp_(-1, 1)
-        optimizer.step()
+        self.optimizer.step()
