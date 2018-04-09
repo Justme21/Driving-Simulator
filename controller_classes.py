@@ -1,5 +1,8 @@
+import datetime
 import math
 import numpy as np
+import matplotlib.pyplot as plt
+import os
 import random
 import torch
 import torch.nn.functional as F
@@ -91,10 +94,6 @@ class RandomController():
         self.angle_ranges = angle_cats
 
 
-    def train(self,state,next_state):
-        pass
-
-
     def selectAction(self,state):
         accel_cat = random.randint(0,len(self.accel_ranges)-1)
         angle_cat = random.randint(0,len(self.angle_ranges)-1)
@@ -103,7 +102,19 @@ class RandomController():
         return accel,angle
 
 
-class Controller():
+    def train(self,state,next_state):
+        pass
+
+    def updateTarget(self):
+        pass
+
+    def recordModel(self):
+        pass
+
+    def plotResults(self):
+        pass
+
+class DQNController():
     def __init__(self,behaviour,accel_cats,angle_cats):
         self.gamma = .999
         self.eps_start = 0.9
@@ -111,6 +122,7 @@ class Controller():
         self.eps_decay = 200
 
         self.num_steps = 0
+        self.num_eps = 1
 
         self.accel = None
         self.angle = None
@@ -124,6 +136,10 @@ class Controller():
         self.memory = ReplayMemory(10000)
         self.optimizer = None
 
+        self.reward_sum = 0
+        self.reward_list = []
+
+
     def initialiseModel(self,state_len):
         self.model = DQN(state_len,len(self.accel_ranges),len(self.angle_ranges))
         self.target_model = DQN(state_len,len(self.accel_ranges),len(self.angle_ranges))
@@ -131,11 +147,41 @@ class Controller():
         self.optimizer = torch.optim.RMSprop(self.model.parameters())
 
 
+    def updateTarget(self):
+        self.target_model.load_state_dict(self.model.state_dict())
+
+
+    def recordModel(self):
+        now = datetime.datetime.now()
+        date = "{}-{}-{}".format(now.day,now.month,now.year)
+        time = "{}-{}".format(now.hour,now.minute)
+        if not os.path.exists("./driving_models/{}".format(date)):
+            os.makedirs("./driving_models/{}".format(date))
+        torch.save(self.model.state_dict(),"./driving_models/{}/{}-{}DQN.pt".format(date,time,self.behaviour))
+
+
+    def restartModel(self):
+        self.reward_list.append(self.reward_sum/self.num_steps)
+        self.num_steps = 0
+        self.num_eps += 1
+        self.reward_sum = 0
+
+
+    def storeResults(self):
+        now = datetime.datetime.now()
+        result_record = open("result-{}-{}-{}-{}.txt".format(self.behaviour,now.day,now.month,now.year),"w")
+        for i in range(len(self.reward_list)):
+            result_record.write("{}\t{}\n".format(i*10,self.reward_list[i]))
+        result_record.close()
+        title = "{}-DQN".format(self.behaviour.capitalize())
+        rewardPlotter(title,self.reward_list,10)
+
+
     def selectAction(self,state):
         if not isinstance(state,torch.Tensor):
             state = torch.Tensor([state])
         sample = random.random()
-        eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(-1.*self.num_steps/self.eps_decay)
+        eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(-1.*self.num_steps/(self.num_eps*self.eps_decay))
         self.num_steps += 1
         if sample > eps_threshold:
             accel,angle = self.model(Variable(state, volatile=True))
@@ -148,6 +194,7 @@ class Controller():
         self.angle = angle_cat
         accel = np.random.uniform(self.accel_ranges[accel_cat][0],self.accel_ranges[accel_cat][1])
         angle = np.random.uniform(self.angle_ranges[angle_cat][0],self.angle_ranges[angle_cat][1])
+        self.num_steps += 1
         return accel,angle
 
 
@@ -177,29 +224,13 @@ class Controller():
         return reward
 
 
-    #def plot_durations():
-    #    plt.figure(2)
-    #    plt.clf()
-    #    durations_t = torch.FloatTensor(episode_durations)
-    #    plt.title('Training...')
-    #    plt.xlabel('Episode')
-    #    plt.ylabel('Duration')
-    #    plt.plot(durations_t.numpy())
-    #    # Take 100 episode averages and plot them too
-    #    if len(durations_t) >= 100:
-    #        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-    #        means = torch.cat((torch.zeros(99), means))
-    #        plt.plot(means.numpy())
-    #
-    #    plt.pause(0.001)  # pause a bit so that plots are updated
-    #    display.display(plt.gcf())
-
-
     def train(self,state,next_state):
         #self.accel and self.angle are integers indicating chosen action and angle
         action = torch.Tensor([[self.accel,self.angle]])
         #Reward is an integer
         reward = self.computeReward(state,next_state)
+
+        self.reward_sum += reward
 
         state = torch.Tensor([state])
         next_state = torch.Tensor([next_state])
@@ -209,17 +240,8 @@ class Controller():
         self.memory.push(state, action, next_state, reward)
 
         # Perform one step of the optimization (on the target network)
-        self.optimize_model()
-        #        if done:
-        #            episode_durations.append(t + 1)
-        #            plot_durations()
-        #            break
-
-        #print('Complete')
-        #env.render(close=True)
-        #env.close()
-        #plt.ioff()
-        #plt.show()
+        if self.num_steps%20 == 0:
+            self.optimize_model()
 
 
     def optimize_model(self):
@@ -274,3 +296,13 @@ class Controller():
         for param in self.model.parameters():
             param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
+
+
+def rewardPlotter(title,reward_list,step_size):
+    plt.figure(2)
+    plt.clf()
+    plt.title(title)
+    plt.xlabel('Episode')
+    plt.ylabel('Reward')
+    plt.plot([x*step_size for x in range(len(reward_list))],reward_list)
+    plt.show()

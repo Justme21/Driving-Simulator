@@ -63,9 +63,6 @@ class Car():
         self.repo_len = int((1/timestep)*2) #Store the past 2 seconds of state information
         self.public_state_repo = []
 
-        #Initialise the position, velocity and heading features
-        #self.initSetup(road,v,is_top_lane)
-
         self.controller = controller
         #Initialise time. Used to record how long it takes to achieve an objective
         self.time = 0
@@ -73,7 +70,7 @@ class Car():
 
     def setFourCorners(self):
         """Compute the initial coordinates of the four corners of the car (with respect
-           to the heading). These values are stored and continuously updated in a 
+           to the heading). These values are stored and continuously updated in a
            dictionary for ease of identifying crashes later on"""
         direction = self.heading
         phi = math.sqrt((self.length/2)**2 + (self.width/2)**2)
@@ -180,28 +177,24 @@ class Car():
            angle this determines how much the vehicle should move, and then resets the
            vehicles coordinates appropriately."""
 
-        #accel,turn_angle = self.chooseAction()
+        head_dot = self.turn_accel
+        v_dot = self.accel
+
+        self.v += self.timestep*v_dot
+        self.heading += self.timestep*head_dot
         #The changes induced by the dynamics
         x_dot = self.v*math.cos(math.radians(self.heading))
         #y_dot is set as negative to reflect the fact the pygame coordinate space
         y_dot = -self.v*math.sin(math.radians(self.heading))
-        #x_dot = self.v*math.cos(math.radians(turn_angle))
-        #y_dot = self.v*math.sin(math.radians(turn_angle))
-        head_dot = self.turn_accel
-        v_dot = self.accel
 
         #Applying the changes calculated above
         self.y_com += self.timestep*y_dot
         self.x_com += self.timestep*x_dot
-        for entry in self.four_corners:
-            self.four_corners[entry][0] += self.timestep*x_dot
-            self.four_corners[entry][1] += self.timestep*y_dot
-        self.v += self.timestep*v_dot
-        self.heading += self.timestep*head_dot
+        self.setFourCorners()
 
 
     def checkNewOn(self):
-        """Check to see if self is now on any of the environment objects that it 
+        """Check to see if self is now on any of the environment objects that it
            was not on in the previous round."""
         #The list of objects we need to test to check if we are on.
         candidates = []
@@ -223,11 +216,11 @@ class Car():
                 #If front of car is within lane_width of front/back of lane
                 #Then it is worth checking if we have transitioned onto the
                 #next/previous junction for the lane.
-                if computeDistance((self.x_com,self.y_com),front_pt) < \
-                    obj.width+self.length/2 and obj.to_junction not in self.on: 
+                if obj.to_junction not in self.on and computeDistance((self.x_com,self.y_com),\
+                        front_pt) < obj.width+self.length/2:
                     candidates.append(obj.to_junction)
-                if computeDistance((self.x_com,self.y_com),back_pt) < \
-                    obj.width+self.length/2 and obj.from_junction not in self.on: 
+                if obj.from_junction not in self.on and computeDistance((self.x_com,self.y_com),\
+                        back_pt) < obj.width+self.length/2 and obj.from_junction not in self.on:
                     candidates.append(obj.from_junction)
 
                 #It is always worth checking to make sure we have not drifted

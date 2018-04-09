@@ -30,7 +30,7 @@ class GraphicWrapper(pygame.sprite.Sprite):
             self.surface.set_colorkey(INVIS)
         else:
             self.surface = surface
-      
+
         if isinstance(obj,road_classes.Road):
             self.extras = [GraphicWrapper(obj.top_up_lane,width,height,self.surface,False),\
                        GraphicWrapper(obj.bottom_down_lane,width,height,self.surface,False)]
@@ -47,7 +47,7 @@ class GraphicWrapper(pygame.sprite.Sprite):
 
         for i,entry in enumerate(corner_list):
             corner_list[i] = [unit*k for k in entry]
-        if is_default: 
+        if is_default:
             color = self.default_color
         else:
             color = self.backup_color

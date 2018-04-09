@@ -1,6 +1,8 @@
 import controller_classes
+import datetime
 import graphic_simulator
 import map_builder
+import matplotlib.pyplot as plt
 import random
 import time
 import vehicle_classes
@@ -49,12 +51,15 @@ def putCarsOnMap(cars,roads,car_speeds=None,car_lanes=None):
     car_lanes = listFixer(car_lanes,[num_cars,2],[0,0],[len(roads)-1,1])
     car_speeds = listFixer(car_speeds,[num_cars,1],1,6)
 
+    print("SPEEDS: {}".format(car_speeds))
+
     #Each entry in car_lanes is the address of a road, and a lane on that road where
     # the car should be placed. Once initialised with this information the Car object
     # will give itself a random location on the specified lane with the same heading as
     # the lane.
     for i,car in enumerate(cars):
         car.initSetup(roads[car_lanes[i][0]],car_lanes[i][1],car_speeds[i])
+        car.controller.restartModel()
     return cars
 
 
@@ -86,15 +91,34 @@ def initialiseCars(num_cars,controllers,accel_cats,angle_cats,debug):
     return cars
 
 
+def storePerformance(performance_list,step_size):
+    now = datetime.datetime.now()
+    perf_record = open("performance-{}-{}-{}.txt".format(now.day,now.month,now.year),"w")
+    for i in range(len(performance_list)):
+        perf_record.write("{}\t{}\n".format(i*step_size,performance_list[i]))
+    perf_record.close()
+
+    plt.figure(2)
+    plt.clf()
+    plt.title('Training Episode Durations')
+    plt.xlabel('Episode')
+    plt.ylabel('Duration')
+    plt.plot([x*10 for x in range(len(performance_list))],performance_list)
+    plt.show()
+
+
 def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
                 car_goals,controllers,accel_cats,angle_cats,run_graphics,debug,car_speeds=None,car_lanes=None):
+
+    run_len = 0
+    performance_list = []
 
     cur_states = [None for _ in range(num_cars)]
     next_states = [None for _ in range(num_cars)]
 
     cars = initialiseCars(num_cars,controllers,accel_cats,angle_cats,debug)
 
-    for _ in range(num_episodes):
+    for ep_num in range(num_episodes):
         junctions,roads,cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
                                                     junc_pairs,cars,car_speeds,car_lanes,debug)
 
@@ -108,6 +132,8 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
             car.chooseAction()
             car.move()
 
+        run_len += 1
+
         while canGo(cars):
             for i,car in enumerate(cars):
                 car.sense()
@@ -120,13 +146,21 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
             if run_graphics:
                 g_sim.update()
 
+            run_len += 1
+
+        if ep_num%10==0:
+            performance_list.append(run_len/10)
+            run_len = 0
+
         if run_graphics:
-            time.sleep(5)
+            time.sleep(2)
             g_sim.shutdown()
 
     for car in cars:
         car.controller.recordModel()
+        car.controller.storeResults()
 
+    storePerformance(performance_list,10)
 
 def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
                   car_goals,run_graphics,debug,car_speeds=None,car_lanes=None):
@@ -202,11 +236,11 @@ if __name__ == "__main__":
     run_graphics = True
     debug = False
 
-    num_episodes = 3
+    num_episodes = 1
     accel_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
     angle_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
     #controllers = []
-    controllers = [controller_classes.Controller("safe",accel_cats,angle_cats)]
+    controllers = [controller_classes.DQNController("safe",accel_cats,angle_cats)]
     #runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
     #              car_goals,run_graphics,debug)
     runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
