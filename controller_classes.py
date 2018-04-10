@@ -139,6 +139,8 @@ class DQNController():
         self.reward_sum = 0
         self.reward_list = []
 
+        self.reward = 0 #NOTE: Stored for debugging purposes, delete when no longer useful
+
 
     def initialiseModel(self,state_len):
         self.model = DQN(state_len,len(self.accel_ranges),len(self.angle_ranges))
@@ -161,7 +163,8 @@ class DQNController():
 
 
     def restartModel(self):
-        self.reward_list.append(self.reward_sum/self.num_steps)
+        if self.num_steps != 0:
+            self.reward_list.append(self.reward_sum)
         self.num_steps = 0
         self.num_eps += 1
         self.reward_sum = 0
@@ -171,10 +174,10 @@ class DQNController():
         now = datetime.datetime.now()
         result_record = open("result-{}-{}-{}-{}.txt".format(self.behaviour,now.day,now.month,now.year),"w")
         for i in range(len(self.reward_list)):
-            result_record.write("{}\t{}\n".format(i*10,self.reward_list[i]))
+            result_record.write("{}\t{}\n".format(i,self.reward_list[i]))
         result_record.close()
         title = "{}-DQN".format(self.behaviour.capitalize())
-        rewardPlotter(title,self.reward_list,10)
+        rewardPlotter(title,self.reward_list,1)
 
 
     def selectAction(self,state):
@@ -203,23 +206,25 @@ class DQNController():
         # the locations of different values. Thus changes to state must be reflected here
         # Current version of state:
         # 0 v_par, 1 v_perp, 2 rel_heading
-        # 3 time_on_objective, 4 dist_to_waypoint, 5 dist_to_right_side_of_road
-        # 6 dist_to_left_side_of_road, 7 accel, 8 angle_accel,
-        # 9 has_crashed, 10 is_on_road, 11 is_complete
+        # 3 if min difference between heading and lane direction is>90 4 time_on_objective, 
+        # 5 dist_to_waypoint, 6 dist_to_right_side_of_road, 7 dist_to_left_side_of_road, 
+        # 8 accel, 9 angle_accel, 10 has_crashed, 11 is_on_road, 12 is_complete
         x,w = 0,0
         reward = 0
-        reward += min(1,from_state[4]-to_state[4]) #Want this to be positive to be getting closer to destination
-        reward += min(1,1.0/(abs(to_state[0]-30)))
+        if to_state[0]<=0: reward -= 2 #Want to penalise reversing 
+        if to_state[3]==0: reward += 1 #Want to penalise facing the wrong direction on the lane
+        reward += 2*min(1,from_state[5]-to_state[5]) #Want this to be positive to be getting closer to destination
+        reward += min(1,1.0/(abs(to_state[0]-50)))
         if self.behaviour is "safe":
-            x = to_state[5]/to_state[6] #distanceLeft/distanceRight
-            w = to_state[8] - from_state[8] #change in angular acceleration
-            reward += min(1,w*(x-1/x)) #Rewards changes that tend x to 1 (i.e. the center of the road)
+            x = to_state[6]/to_state[7] #distanceLeft/distanceRight
+            w = to_state[9] - from_state[9] #change in angular acceleration
+            reward += 3*min(1,w*(x-1/x)) #Rewards changes that tend x to 1 (i.e. the center of the road)
         elif self.behaviour is "aggro":
-            if to_state[3] < 10: reward += 1
-            else: reward += 1.0/to_state[3]
-        if not to_state[10]: reward += -3
-        if to_state[9]: reward += -3
-        if to_state[11]: reward += 3
+            if to_state[4] < 10: reward += 1.5
+            else: reward += 15/to_state[4]
+        if not to_state[11]: reward += -3
+        if to_state[10]: reward += -3
+        if to_state[12]: reward += 6
         #Reward is an integer
         return reward
 
@@ -230,6 +235,7 @@ class DQNController():
         #Reward is an integer
         reward = self.computeReward(state,next_state)
 
+        self.reward = reward
         self.reward_sum += reward
 
         state = torch.Tensor([state])

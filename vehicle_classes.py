@@ -68,6 +68,9 @@ class Car():
         self.time = 0
 
 
+    def distToObj(self):
+        return len(self.trajectory)-self.traj_posit
+
     def setFourCorners(self):
         """Compute the initial coordinates of the four corners of the car (with respect
            to the heading). These values are stored and continuously updated in a
@@ -158,7 +161,9 @@ class Car():
         self.traj_posit = 0
         self.trajectory,self.waypoints = initialiseTrajectory(road,is_top_lane)
         if self.debug:
-            print("{} has TRAJECTORY: {}".format(self.label,[x.label for x in self.traj]))
+            print("{} has TRAJECTORY: {}".format(self.label,[x.label for x in self.trajectory]))
+
+        self.checkPositState()
 
 
     def composeState(self):
@@ -171,6 +176,7 @@ class Car():
         # stressing over
         state = self.composeState()
         self.accel,self.turn_accel = self.controller.selectAction(state)
+
 
     def move(self):
         """The motion dynamics of the vehicle. Given an input acceleration and wheel-
@@ -235,13 +241,13 @@ class Car():
                 if self.debug: print("Testing Candidates in Junction {}".format(obj.label))
                 for lane in obj.in_lanes:
                     if self.debug:
-                        print("IN: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(obj.label,\
+                        print("IN: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(lane.label,\
                             self.heading,lane.direction,(lane.direction+180)%360))
                     if math.fabs(((lane.direction+180)%360)-self.heading)<45:
                         candidates.append(lane)
                 for lane in obj.out_lanes:
                     if self.debug:
-                        print("OUT: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(obj.label,\
+                        print("OUT: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(lane.label,\
                                self.heading,(lane.direction+180)%360,lane.direction))
                     if math.fabs(lane.direction-self.heading)<45:
                         candidates.append(lane)
@@ -255,7 +261,7 @@ class Car():
         for entry in candidates:
             if self.debug:
                 print("Testing Candidate {}".format(entry.label))
-            if checkOn(self,entry):
+            if checkOn(self,entry,False): #False for is_on since, by definition, candidates are not in self.on
                 self.putOn(entry)
 
 
@@ -267,7 +273,7 @@ class Car():
         for obj in list(self.on):
             if self.debug:
                 print("Checking if off {}".format(obj.label))
-            if not checkOn(self,obj):
+            if not checkOn(self,obj,True): #is_on is True since all objs are by definition in self.on
                 self.takeOff(obj)
 
 
@@ -305,6 +311,7 @@ class Car():
            object."""
 
         #First check if you are moving onto a new road section
+        if self.debug: print("Currently on: {}".format([x.label for x in self.on]))
         if self.debug: print("Checking On Anything New")
         on_candidates = self.checkNewOn()
         if self.debug: print("Done Checking On")
@@ -320,6 +327,8 @@ class Car():
             if isinstance(entry,road_classes.Lane) or isinstance(entry,road_classes.Junction):
                 self.on_road = True
                 break
+
+        if self.debug: print("New list on: {}".format([x.label for x in self.on]))
 
         #No point repeatedly checking for a crash that already happened
         if not self.crashed:
@@ -365,13 +374,13 @@ class Car():
         while i<len(self.on) and not (isinstance(self.on[i],road_classes.Lane) or\
                    isinstance(self.on[i],road_classes.Junction)): i+=1
         if i == len(self.on):
-            print("No Road/Junction found in on: ")
-            print("Car is: {}".format(self.printStatus()))
-            print("Self.on:")
-            for entry in self.on:
-                print("\t{}".format(entry.printStatus()))
-            print("")
-            #exit(-1)
+            if self.debug:
+                print("No Road/Junction found in on: ")
+                print("Car is: {}".format(self.printStatus()))
+                print("Self.on:")
+                for entry in self.on:
+                    print("\t{}".format(entry.printStatus()))
+                print("")
             beta = alpha
         else:
             beta = self.on[i].direction
@@ -383,6 +392,14 @@ class Car():
         #state.append(self.heading)
         state.append(beta-alpha)
 
+        if i==len(self.on):
+            state.append(1)
+        else:
+            on_lanes = [x.direction for x in self.on if isinstance(x,road_classes.Lane)]
+            if on_lanes != []:
+                state.append(int(90<min([abs(self.heading-x) for x in on_lanes])))
+            else: state.append(0)
+
         self.pub_state = state
 
         while len(self.public_state_repo)>=self.repo_len: del(self.public_state_repo[0])
@@ -393,13 +410,22 @@ class Car():
         state = []
         #The time the vehicle has been runnning on this trajectory for
         state.append(self.time)
+
+        #Identify relevant trajectory elements
+        if self.is_complete:
+            #In this case the state will have just changed but won't have been picked up by
+            # the simulator yet. 
+            waypt = self.waypoints[self.traj_posit-1]
+            obj = self.trajectory[self.traj_posit-1]
+        else:
+            waypt = self.waypoints[self.traj_posit]
+            obj = self.trajectory[self.traj_posit]
+
         #The distance from the next waypoint in the trajectory
-        waypt = self.waypoints[self.traj_posit]
         ego_com = (self.x_com,self.y_com)
         state.append(computeDistance(ego_com,waypt))
 
         #The perpendicular distance to either side of the lane/junction
-        obj = self.trajectory[self.traj_posit]
         if obj.direction%180 == 90:
             state.append(math.fabs(ego_com[0]-obj.four_corners["back_right"][0]))
             state.append(math.fabs(ego_com[0]-obj.four_corners["back_left"][0]))
@@ -467,13 +493,13 @@ def buildTrajectory(start_point):
     trajectory.append(next_stop)
     waypoints.append(pt)
     #Trajectories must be at least 3 stops long but no more than 9
-    while len(trajectory)<10 and (len(trajectory)<3 or random.random()<.5):
+    while len(trajectory)<5 and (len(trajectory)<2 or random.random()<.5):
         #Choosing a lane out of the junction to add to the trajectory
         while next_stop in trajectory:
             next_stop = random.choice(next_stop.out_lanes)
-        pt = computeTrajectoryPoint(next_stop,"back")
-        trajectory.append(next_stop.road) #Here next_stop is the lane that leads out of the junction
-        waypoints.append(pt)
+        #pt = computeTrajectoryPoint(next_stop,"back")
+        #trajectory.append(next_stop.road) #Here next_stop is the lane that leads out of the junction
+        #waypoints.append(pt)
 
         #Adding the junction the current lane leads into
         pt = computeTrajectoryPoint(next_stop,"front")
@@ -483,6 +509,8 @@ def buildTrajectory(start_point):
         #Here we are allowing loops to form in the trajectory. But they end the trajectory
         #if the current junction was previously in the trajectory then it is a terminal point
         if next_stop in trajectory[:-1]: break
+        #In this case the only exit would require a U-turn which is beyond the scope of our current intentions
+        if len(next_stop.out_lanes)==1: break
     return trajectory,waypoints
 
 
@@ -498,7 +526,7 @@ def initialiseTrajectory(road,is_top_lane):
     return traj,waypoints
 
 
-def checkOn(car, obj):
+def checkOn(car, obj,is_on=False):
     """Returns true if the car is sufficiently on the object, and false otherwise.
        'Sufficiently' means in at least one dimension the vehicle is entirely within
        the boundary of the object, and in the other there are at least two wheels on"""
@@ -520,7 +548,16 @@ def checkOn(car, obj):
         car.printStatus()
         obj.printStatus()
         print("\n")
-    if max(top_bottom,left_right)==4 and min(top_bottom,left_right)>=2:
+
+    #If you are already on obj, then you should have at least 3 wheels on it to still be "on"
+    #But if you are not already confirmed on it then having 2 wheels on it should suffice
+    #This results in some gross cyclic behaviour during lane changes, but gets better performance
+    #in general
+    if is_on: low_bound = 3
+    else: low_bound = 2
+
+    #if max(top_bottom,left_right)==4 and min(top_bottom,left_right)>=low_bound:
+    if min(top_bottom,left_right)>=low_bound:
         return True
     else:
         return False

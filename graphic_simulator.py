@@ -88,6 +88,7 @@ class GraphicSimulator():
 
 
     def shutdown(self):
+        pygame.image.save(self.screen,"screenshot.jpeg")
         pygame.quit()
         self.is_quit = True
 

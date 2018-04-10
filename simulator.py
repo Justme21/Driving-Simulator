@@ -51,7 +51,6 @@ def putCarsOnMap(cars,roads,car_speeds=None,car_lanes=None):
     car_lanes = listFixer(car_lanes,[num_cars,2],[0,0],[len(roads)-1,1])
     car_speeds = listFixer(car_speeds,[num_cars,1],1,6)
 
-    print("SPEEDS: {}".format(car_speeds))
 
     #Each entry in car_lanes is the address of a road, and a lane on that road where
     # the car should be placed. Once initialised with this information the Car object
@@ -100,9 +99,9 @@ def storePerformance(performance_list,step_size):
 
     plt.figure(2)
     plt.clf()
-    plt.title('Training Episode Durations')
+    plt.title('Distance to Goal')
     plt.xlabel('Episode')
-    plt.ylabel('Duration')
+    plt.ylabel('Distance')
     plt.plot([x*10 for x in range(len(performance_list))],performance_list)
     plt.show()
 
@@ -110,7 +109,7 @@ def storePerformance(performance_list,step_size):
 def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
                 car_goals,controllers,accel_cats,angle_cats,run_graphics,debug,car_speeds=None,car_lanes=None):
 
-    run_len = 0
+    dist_to_obj = 0
     performance_list = []
 
     cur_states = [None for _ in range(num_cars)]
@@ -132,25 +131,28 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
             car.chooseAction()
             car.move()
 
-        run_len += 1
 
         while canGo(cars):
-            for i,car in enumerate(cars):
-                car.sense()
-                next_states[i] = car.composeState()
-                car.controller.train(cur_states[i],next_states[i])
-            cur_states = list(next_states)
             for car in cars:
                 car.chooseAction()
                 car.move()
             if run_graphics:
                 g_sim.update()
+            for i,car in enumerate(cars):
+                car.sense()
+                next_states[i] = car.composeState()
+                car.controller.train(cur_states[i],next_states[i])
+            cur_states = list(next_states)
 
-            run_len += 1
+        for car in cars:
+            if not isinstance(car.controller,controller_classes.RandomController):
+                dist_to_obj += car.distToObj()
+
+        print("EP:{}\tDIST:{}\t{}".format(ep_num,cars[0].distToObj(),cars[0].controller.reward))
 
         if ep_num%10==0:
-            performance_list.append(run_len/10)
-            run_len = 0
+            performance_list.append(dist_to_obj/10)
+            dist_to_obj = 0
 
         if run_graphics:
             time.sleep(2)
@@ -220,24 +222,24 @@ if __name__ == "__main__":
     #junc_pairs = [(0,1),(1,2),(3,2),(4,1),(5,0),(4,3),(5,4)]
 
     #3-road intersection
-    num_junctions = 5
-    num_roads = 4
+    num_junctions = 6
+    num_roads = 5
     num_cars = 1
 
-    road_angles = [180,180,90,90]
-    road_lengths = [30,30,30,30]
+    road_angles = [180,180,180,180,180]
+    road_lengths = [30,30,30,30,30]
 
-    junc_pairs = [(0,1),(1,2),(3,1),(1,4)]
+    junc_pairs = [(0,1),(1,2),(2,3),(3,4),(4,5)]
 
     car_speeds = [5.5]
     car_lanes = [(0,1)]
-    car_goals = [0,3,3,3,3]
+    car_goals = [5]
 
-    run_graphics = True
+    run_graphics = False
     debug = False
 
-    num_episodes = 1
-    accel_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
+    num_episodes = 10000
+    accel_cats = [(-3,-1.5),(-1.5,0),(0,1.5),(1.5,3)]
     angle_cats = [(-5,-2.5),(-2.5,0),(0,2.5),(2.5,5)]
     #controllers = []
     controllers = [controller_classes.DQNController("safe",accel_cats,angle_cats)]
