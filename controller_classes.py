@@ -41,6 +41,7 @@ class DQN(nn.Module):
     def __init__(self,state_len,num_parti_accel,num_parti_angle):
         #Layers for the model
         super(DQN,self).__init__()
+        self.base_layer_list = None
         self.layer_list = None
         self.last_layers_accel = None
         self.last_layers_angle = None
@@ -49,6 +50,11 @@ class DQN(nn.Module):
 
     def initialiseLayers(self,state_len,num_parti_accel,num_parti_angle):
         state_len = int(state_len)
+
+        self.base_layer_list = []
+        for _ in range(5):
+            self.base_layer_list.append(nn.Linear(state_len,state_len))
+
         self.layer_list = []
         while state_len>max(20,num_parti_accel,num_parti_angle):
             self.layer_list.append(nn.Linear(state_len,int(state_len/2)))
@@ -69,6 +75,10 @@ class DQN(nn.Module):
 
 
     def forward(self,x):
+        for layer in self.base_layer_list:
+            x = layer(x)
+            x = F.relu(x)
+
         for layer in self.layer_list:
             x = layer(x)
             x = F.relu(x)
@@ -139,8 +149,6 @@ class DQNController():
         self.reward_sum = 0
         self.reward_list = []
 
-        self.reward = 0 #NOTE: Stored for debugging purposes, delete when no longer useful
-
 
     def initialiseModel(self,state_len):
         self.model = DQN(state_len,len(self.accel_ranges),len(self.angle_ranges))
@@ -208,23 +216,27 @@ class DQNController():
         # 0 v_par, 1 v_perp, 2 rel_heading
         # 3 if min difference between heading and lane direction is>90 4 time_on_objective, 
         # 5 dist_to_waypoint, 6 dist_to_right_side_of_road, 7 dist_to_left_side_of_road, 
-        # 8 accel, 9 angle_accel, 10 has_crashed, 11 is_on_road, 12 is_complete
-        x,w = 0,0
-        reward = 0
-        if to_state[0]<=0: reward -= 2 #Want to penalise reversing 
-        if to_state[3]==0: reward += 1 #Want to penalise facing the wrong direction on the lane
-        reward += 2*min(1,from_state[5]-to_state[5]) #Want this to be positive to be getting closer to destination
-        reward += min(1,1.0/(abs(to_state[0]-50)))
-        if self.behaviour is "safe":
-            x = to_state[6]/to_state[7] #distanceLeft/distanceRight
-            w = to_state[9] - from_state[9] #change in angular acceleration
-            reward += 3*min(1,w*(x-1/x)) #Rewards changes that tend x to 1 (i.e. the center of the road)
-        elif self.behaviour is "aggro":
-            if to_state[4] < 10: reward += 1.5
-            else: reward += 15/to_state[4]
-        if not to_state[11]: reward += -3
-        if to_state[10]: reward += -3
-        if to_state[12]: reward += 6
+        # 8 accel, 9 angle_accel, 10 has_crashed, 11 is_on_road, 12 is_complete, 13 dist_to_obj
+        reward = 10*int(to_state[12])
+        reward -= 2*int(to_state[10])
+        reward -= 2*(1-int(to_state[11]))
+        reward += (5-to_state[13])*(from_state[13]-to_state[13]) #test case specific value
+        #x,w = 0,0
+        #reward = 0
+        #if to_state[0]<=0: reward -= 2 #Want to penalise reversing 
+        #if to_state[3]==0: reward += 1 #Want to penalise facing the wrong direction on the lane
+        #reward += 2*min(1,from_state[5]-to_state[5]) #Want this to be positive to be getting closer to destination
+        #reward += min(1,1.0/(abs(to_state[0]-50)))
+        #if self.behaviour is "safe":
+        #    x = to_state[6]/to_state[7] #distanceLeft/distanceRight
+        #    w = to_state[9] - from_state[9] #change in angular acceleration
+        #    reward += 3*min(1,w*(x-1/x)) #Rewards changes that tend x to 1 (i.e. the center of the road)
+        #elif self.behaviour is "aggro":
+        #    if to_state[4] < 10: reward += 1.5
+        #    else: reward += 15/to_state[4]
+        #if not to_state[11]: reward += -3
+        #if to_state[10]: reward += -3
+        #if to_state[12]: reward += 6
         #Reward is an integer
         return reward
 
@@ -235,7 +247,6 @@ class DQNController():
         #Reward is an integer
         reward = self.computeReward(state,next_state)
 
-        self.reward = reward
         self.reward_sum += reward
 
         state = torch.Tensor([state])
@@ -297,7 +308,7 @@ class DQNController():
 
         # Optimize the model
         self.optimizer.zero_grad()
-        accel_loss.backward()
+        accel_loss.backward(retain_graph=True) #retain graph so gradient can be calculated for angle_loss. Slows down a lot
         angle_loss.backward()
         for param in self.model.parameters():
             param.grad.data.clamp_(-1, 1)

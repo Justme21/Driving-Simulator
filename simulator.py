@@ -148,7 +148,7 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
             if not isinstance(car.controller,controller_classes.RandomController):
                 dist_to_obj += car.distToObj()
 
-        print("EP:{}\tDIST:{}\t{}".format(ep_num,cars[0].distToObj(),cars[0].controller.reward))
+        print("EP:{}\tDIST:{}\t{}".format(ep_num,cars[0].distToObj(),cars[0].controller.reward_sum))
 
         if ep_num%10==0:
             performance_list.append(dist_to_obj/10)
@@ -163,6 +163,7 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
         car.controller.storeResults()
 
     storePerformance(performance_list,10)
+
 
 def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
                   car_goals,run_graphics,debug,car_speeds=None,car_lanes=None):

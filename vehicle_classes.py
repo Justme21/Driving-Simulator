@@ -448,6 +448,7 @@ class Car():
         state.append(int(self.crashed))
         state.append(int(self.on_road))
         state.append(int(self.is_complete))
+        state.append(self.distToObj())
 
         self.priv_state = state
 
@@ -484,8 +485,7 @@ def computeTrajectoryPoint(stop_point,front_back_label):
     pt = ((fl[0] + fr[0])/2,(fl[1]+fr[1])/2)
     return pt
 
-
-def buildTrajectory(start_point):
+"""def buildTrajectory(start_point):
     next_stop = start_point.to_junction #next_stop is junction next to be entered
     trajectory = []
     waypoints = []
@@ -497,6 +497,48 @@ def buildTrajectory(start_point):
         #Choosing a lane out of the junction to add to the trajectory
         while next_stop in trajectory:
             next_stop = random.choice(next_stop.out_lanes)
+        #pt = computeTrajectoryPoint(next_stop,"back")
+        #trajectory.append(next_stop.road) #Here next_stop is the lane that leads out of the junction
+        #waypoints.append(pt)
+
+        #Adding the junction the current lane leads into
+        pt = computeTrajectoryPoint(next_stop,"front")
+        next_stop = next_stop.to_junction
+        trajectory.append(next_stop)
+        waypoints.append(pt)
+        #Here we are allowing loops to form in the trajectory. But they end the trajectory
+        #if the current junction was previously in the trajectory then it is a terminal point
+        if next_stop in trajectory[:-1]: break
+        #In this case the only exit would require a U-turn which is beyond the scope of our current intentions
+        if len(next_stop.out_lanes)==1: break
+    return trajectory,waypoints
+"""
+
+def buildTrajectory(start_point):
+    ###This builds a trajectory just like commented out version above
+    ### but specially tailored to always produce the longet straight line
+    ### traectory
+    next_stop = start_point.to_junction #next_stop is junction next to be entered
+    trajectory = []
+    waypoints = []
+    pt = computeTrajectoryPoint(start_point,"front")
+    trajectory.append(next_stop)
+    waypoints.append(pt)
+    poss_next = None
+    candidate_list = None
+    #Trajectories must be at least 3 stops long but no more than 9
+    while True:
+        #Choosing a lane out of the junction to add to the trajectory
+        poss_next = random.choice(next_stop.out_lanes)
+        candidate_list = list(next_stop.out_lanes)
+        while poss_next.to_junction in trajectory or poss_next.road is start_point.road:
+            poss_next = random.choice(candidate_list)
+            candidate_list.remove(poss_next)
+        #print("POSS_NEXT_TO_JUNC: {}".format(poss_next.to_junction.label))
+        if poss_next.to_junction.label == 'J0':
+            print("POSS_NEXT: {}\tSTART_POINT:{}".format(poss_next.label,start_point.label))
+            exit(-1)
+        next_stop = poss_next
         #pt = computeTrajectoryPoint(next_stop,"back")
         #trajectory.append(next_stop.road) #Here next_stop is the lane that leads out of the junction
         #waypoints.append(pt)
