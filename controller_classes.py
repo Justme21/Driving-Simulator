@@ -3,6 +3,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import pdb
 import random
 import torch
 import torch.nn.functional as F
@@ -41,15 +42,20 @@ class DQN(nn.Module):
     def __init__(self,state_len,num_parti_accel,num_parti_angle):
         #Layers for the model
         super(DQN,self).__init__()
+
+        self.l1 = nn.Linear(state_len,4)
+
         self.base_layer_list = None
         self.layer_list = None
         self.last_layers_accel = None
         self.last_layers_angle = None
-        self.initialiseLayers(state_len,num_parti_accel,num_parti_angle)
+        #self.initialiseLayers(state_len,num_parti_accel,num_parti_angle)
 
+        self.state_len = None
 
     def initialiseLayers(self,state_len,num_parti_accel,num_parti_angle):
         state_len = int(state_len)
+        self.state_len = state_len
 
         self.base_layer_list = []
         for _ in range(5):
@@ -75,7 +81,12 @@ class DQN(nn.Module):
 
 
     def forward(self,x):
-        for layer in self.base_layer_list:
+        x = F.relu(self.l1(x))
+        #y = x.clone()
+        #z = x.clone()
+        #y = F.relu(l2(y))
+        #z = F.relu(l3(z))
+        """for layer in self.base_layer_list:
             x = layer(x)
             x = F.relu(x)
 
@@ -92,7 +103,8 @@ class DQN(nn.Module):
                 z = F.relu(z)
 
         #Returns Q-values for all the accelerations and all the angular accelerations
-        return y,z
+        """
+        return x#,x #y,z
 
 
 class RandomController():
@@ -123,6 +135,10 @@ class RandomController():
 
     def plotResults(self):
         pass
+
+    def restartModel(self):
+        pass
+
 
 class DQNController():
     def __init__(self,behaviour,accel_cats,angle_cats):
@@ -195,7 +211,9 @@ class DQNController():
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * math.exp(-1.*self.num_steps/(self.num_eps*self.eps_decay))
         self.num_steps += 1
         if sample > eps_threshold:
-            accel,angle = self.model(Variable(state, volatile=True))
+            #accel,angle = self.model(Variable(state, volatile=True))
+            angle = Variable(torch.Tensor([0]))
+            accel = self.model(Variable(state, volatile=True))
             accel_cat = np.argmax(accel.data)
             angle_cat = np.argmax(angle.data)
         else:
@@ -256,6 +274,7 @@ class DQNController():
         # Store the transition in memory
         self.memory.push(state, action, next_state, reward)
 
+
         # Perform one step of the optimization (on the target network)
         if self.num_steps%20 == 0:
             self.optimize_model()
@@ -281,7 +300,9 @@ class DQNController():
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken
-        accel_q_values, angle_q_values  = self.model(state_batch)#.gather(1, action_batch)
+        #accel_q_values, angle_q_values  = self.model(state_batch)#.gather(1, action_batch)
+        accel_q_values  = self.model(state_batch)#.gather(1, action_batch)
+        angle_q_values = Variable(torch.ones(accel_q_values.size()))
         chosen_accels = accel_q_values.gather(1,action_batch[:,0].long().view(-1,1))
         chosen_angles = angle_q_values.gather(1,action_batch[:,1].long().view(-1,1))
 
@@ -290,14 +311,17 @@ class DQNController():
         accel_next_state_values = Variable(torch.zeros(BATCH_SIZE).type(torch.Tensor))
         angle_next_state_values = Variable(torch.zeros(BATCH_SIZE).type(torch.Tensor))
         #accel_next_state_values[non_final_mask],angle_next_state_values[non_final_mask] = self.model(non_final_next_states)
-        accel_next_state_values,angle_next_state_values = self.target_model(non_final_next_states)
+        #accel_next_state_values,angle_next_state_values = self.target_model(non_final_next_states)
+        accel_next_state_values = self.target_model(non_final_next_states)
+        angle_next_state_values = Variable(torch.ones(accel_next_state_values.size()))
         accel_next_state_values = accel_next_state_values.max(1)[0]
         angle_next_state_values = angle_next_state_values.max(1)[0]
         # Now, we don't want to mess up the loss with a volatile flag, so let's
         # clear it. After this, we'll just end up with a Variable that has
         # requires_grad=False
-        accel_next_state_values.volatile = False
-        angle_next_state_values.volatile = False
+        #accel_next_state_values.volatile = False
+        #angle_next_state_values.volatile = False
+
         # Compute the expected Q values
         expected_accel_state_action_values = (accel_next_state_values * self.gamma) + reward_batch
         expected_angle_state_action_values = (angle_next_state_values * self.gamma) + reward_batch
@@ -309,9 +333,19 @@ class DQNController():
         # Optimize the model
         self.optimizer.zero_grad()
         accel_loss.backward(retain_graph=True) #retain graph so gradient can be calculated for angle_loss. Slows down a lot
-        angle_loss.backward()
-        for param in self.model.parameters():
-            param.grad.data.clamp_(-1, 1)
+        #angle_loss.backward()
+        print("START")
+        for tmp in self.model.parameters():
+            print(tmp.grad)
+        print("END GRAD PRINTOUT")
+        count = 0
+        for i,param in enumerate(self.model.parameters()):
+            print("{}th PARAM: {}".format(i,param.data))
+            if param.grad is not None:
+                count += 1
+                param.grad.data.clamp_(-1, 1)
+        print("GRAD UPDATED for {} PARAMS".format(count))
+        pdb.set_trace()
         self.optimizer.step()
 
 
@@ -322,4 +356,4 @@ def rewardPlotter(title,reward_list,step_size):
     plt.xlabel('Episode')
     plt.ylabel('Reward')
     plt.plot([x*step_size for x in range(len(reward_list))],reward_list)
-    plt.show()
+    plt.ishow()

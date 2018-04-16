@@ -71,6 +71,7 @@ class Car():
     def distToObj(self):
         return len(self.trajectory)-self.traj_posit
 
+
     def setFourCorners(self):
         """Compute the initial coordinates of the four corners of the car (with respect
            to the heading). These values are stored and continuously updated in a
@@ -518,6 +519,7 @@ def buildTrajectory(start_point):
     ###This builds a trajectory just like commented out version above
     ### but specially tailored to always produce the longet straight line
     ### traectory
+    print("SP: {}".format(start_point.label))
     next_stop = start_point.to_junction #next_stop is junction next to be entered
     trajectory = []
     waypoints = []
@@ -531,6 +533,7 @@ def buildTrajectory(start_point):
         #Choosing a lane out of the junction to add to the trajectory
         poss_next = random.choice(next_stop.out_lanes)
         candidate_list = list(next_stop.out_lanes)
+        print("TEST: {}".format(next_stop.label))
         while poss_next.to_junction in trajectory or poss_next.road is start_point.road:
             poss_next = random.choice(candidate_list)
             candidate_list.remove(poss_next)
