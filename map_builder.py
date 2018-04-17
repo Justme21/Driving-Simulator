@@ -125,4 +125,11 @@ def buildMap(num_junctions,num_roads,road_angles,road_lens,junc_pairs):
 
     constructPhysicalOverlay(junctions)
 
-    return junctions,roads
+    road_dict = {}
+    lane,label = None,None
+    for road in roads:
+        lane = road.top_up_lane
+        label = (int(lane.from_junction.label[1:]),int(lane.to_junction.label[1:]))
+        road_dict[label]=road
+
+    return junctions,road_dict

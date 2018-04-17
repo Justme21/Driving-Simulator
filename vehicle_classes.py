@@ -52,6 +52,7 @@ class Car():
         self.label = "C{}".format(label)
 
         #Trajectory and Waypoint
+        self.destination = None
         self.traj_posit = None
         self.trajectory = None
         self.waypoints = None
@@ -113,10 +114,12 @@ class Car():
             obj.takeOff(self)
 
 
-    def initSetup(self,road,v,is_top_lane):
+    def initSetup(self,road_lane,dest,v):
         """Performing initial setup of the car. Input is reference to lane that the
            vehicle is generated on."""
         lane = None
+        road = road_lane[0]
+        is_top_lane = bool(road_lane[1])
         if is_top_lane:
             self.putOn(road.top_up_lane)
             lane = road.top_up_lane
@@ -154,14 +157,15 @@ class Car():
         #The coordinates of each corner of the car
         self.setFourCorners()
 
-        #NOTE: In the future this should be changed so that intial speed is something
-        #      reasonable and not just arbitrarily selected.
-        self.v = v #19.8km/h units are metres per second 
+        self.v = v
 
         #Initialise Trajectory and Waypoint
+        #dest also contains [0,1] lane specification, but for the time being we don't use that
+        destination = dest[0].top_up_lane.to_junction
         self.traj_posit = 0
-        self.trajectory,self.waypoints = initialiseTrajectory(road,is_top_lane)
+        self.trajectory,self.waypoints = initialiseTrajectory(road,is_top_lane,destination)
         if self.debug:
+            print("{}: Trajectory is built".format(self.label))
             print("{} has TRAJECTORY: {}".format(self.label,[x.label for x in self.trajectory]))
 
         self.checkPositState()
@@ -515,7 +519,28 @@ def computeTrajectoryPoint(stop_point,front_back_label):
     return trajectory,waypoints
 """
 
-def buildTrajectory(start_point):
+def assignDijkstraScore(start_junc,cur_score,label):
+    #This uses Dijkstra's method to assign values to every lane on the map according to its
+    # distance from the destination specified on the initial call of the function.
+    len1 = None
+    for lane in start_junc.in_lanes:
+        #Erase remains from a previous trajectory generation
+        #This is possible since runs of this routine cannot overlap
+        len1 = len(label)
+        if lane.dijkstra_score is not None:
+            if lane.dijkstra_score[-len1:] != label:
+                lane.dijkstra_score = None
+
+        #Finding shortest path. This shoukd also prevent recursion
+
+        if lane.dijkstra_score is None or int(lane.dijkstra_score[:-len1])>cur_score+1:
+            lane.dijkstra_score = str(cur_score+1)+label
+            #We're traversing the path backwards, hence we go to the from_junction next
+            assignDijkstraScore(lane.from_junction,cur_score+1,label)
+
+
+def buildTrajectory(start_point,end_point):
+    #start_point is a lane and end_point is a junction
     ###This builds a trajectory just like commented out version above
     ### but specially tailored to always produce the longet straight line
     ### traectory
@@ -528,38 +553,26 @@ def buildTrajectory(start_point):
     waypoints.append(pt)
     poss_next = None
     candidate_list = None
-    #Trajectories must be at least 3 stops long but no more than 9
-    while True:
-        #Choosing a lane out of the junction to add to the trajectory
-        poss_next = random.choice(next_stop.out_lanes)
-        candidate_list = list(next_stop.out_lanes)
-        print("TEST: {}".format(next_stop.label))
-        while poss_next.to_junction in trajectory or poss_next.road is start_point.road:
-            poss_next = random.choice(candidate_list)
-            candidate_list.remove(poss_next)
-        #print("POSS_NEXT_TO_JUNC: {}".format(poss_next.to_junction.label))
-        if poss_next.to_junction.label == 'J0':
-            print("POSS_NEXT: {}\tSTART_POINT:{}".format(poss_next.label,start_point.label))
-            exit(-1)
-        next_stop = poss_next
-        #pt = computeTrajectoryPoint(next_stop,"back")
-        #trajectory.append(next_stop.road) #Here next_stop is the lane that leads out of the junction
-        #waypoints.append(pt)
 
-        #Adding the junction the current lane leads into
-        pt = computeTrajectoryPoint(next_stop,"front")
-        next_stop = next_stop.to_junction
-        trajectory.append(next_stop)
-        waypoints.append(pt)
-        #Here we are allowing loops to form in the trajectory. But they end the trajectory
-        #if the current junction was previously in the trajectory then it is a terminal point
-        if next_stop in trajectory[:-1]: break
-        #In this case the only exit would require a U-turn which is beyond the scope of our current intentions
-        if len(next_stop.out_lanes)==1: break
+    assignDijkstraScore(end_point,-1,end_point.label)
+
+    label_len = len(end_point.label)
+    cur_score = int(start_point.dijkstra_score[:-label_len])
+    min_score,min_lane = None,None
+    while cur_score>0:
+        min_score = -1
+        for lane in next_stop.out_lanes:
+            if min_score == -1 or int(lane.dijkstra_score[:-label_len])<min_score:
+                min_score = int(lane.dijkstra_score[:-label_len])
+                min_lane = lane
+        waypoints.append(computeTrajectoryPoint(min_lane,"front"))
+        next_stop = min_lane.to_junction
+        trajectory.append(min_lane.to_junction)
+        cur_score = min_score
     return trajectory,waypoints
 
 
-def initialiseTrajectory(road,is_top_lane):
+def initialiseTrajectory(road,is_top_lane,destination):
     """Given the current road the vehicle is on (and boolean indicating lane on the road)
        intialises and returns a new trajectory with the next point the end of that lane"""
     lane = None
@@ -567,7 +580,7 @@ def initialiseTrajectory(road,is_top_lane):
         lane = road.top_up_lane
     else:
         lane = road.bottom_down_lane
-    traj,waypoints = buildTrajectory(lane)
+    traj,waypoints = buildTrajectory(lane,destination)
     return traj,waypoints
 
 

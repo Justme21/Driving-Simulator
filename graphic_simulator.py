@@ -42,22 +42,6 @@ class GraphicSimulator():
         self.background.fill(WHITE)
 
 
-    def setUnitVal(junctions,height,width):
-        """Set the scaling constant for the simulator so that the graphics don't 
-           go off the screen"""
-        max_height = -1
-        max_width = -1
-        for entry in junctions:
-            max_x = max([entry.four_corners[x][0] for x in entry.four_corners])
-            max_y = max([entry.four_corners[x][1] for x in entry.four_corners])
-            if max_x>max_width: max_width = max_x
-            if max_y>max_height: max_height = max_y
-
-        #Get the largest value in either direction, divide the total available
-        # distance by it. This gives you the scaling constant
-        return min(height*1.0/max_height,width*1.0/max_width)
-
-
     def update(self):
         """Updates the perspective of the screen to match the current formulation of 
            the symbolic simulation"""

@@ -29,7 +29,7 @@ class Junction():
         #The location of the four corners of the junction
         self.four_corners = {"front_left":None,"front_right":None,"back_left":None,\
                              "back_right":None}
-        
+
         #This is mainly for ease of determining if a car has left whatever it is on
         #NOTE: If the value of self.direction is changed from 90 revise updteCoords
         self.direction = 90
@@ -199,7 +199,7 @@ class Road():
         if self not in obj.on:
             obj.putOn(self)
 
- 
+
     def takeOff(self,obj):
         """Removes reference to object from self.on. Also removes self from obj.on
            if not already done."""
@@ -257,6 +257,7 @@ class Lane():
         if is_top_up: label = str(label) + "T"
         else: label = str(label) + "B"
         self.label = "L{}".format(label)
+        self.dijkstra_score = None
 
 
     def twinLanes(self,lane):
