@@ -11,7 +11,7 @@ import vehicle_classes
 MAX_RUNTIME = 1000
 
 class Simulator():
-    def __init__(self,graphic=False,runtime=None,debug=False,dt=.1):
+    def __init__(self,run_graphics=False,draw_traj=False,runtime=None,debug=False,dt=.1):
         self.junctions = []
         self.cars = []
         self.roads = []
@@ -21,7 +21,8 @@ class Simulator():
         self.time = None
         self.runtime = runtime
 
-        self.graphic = graphic
+        self.graphic = run_graphics
+        self.traj = run_graphics and draw_traj #Won't try draw trajectory if not graphic
         self.g_sim = None
 
         self.debug = debug
@@ -38,12 +39,17 @@ class Simulator():
             car.sense()
 
 
-    def initialiseSimulator(self,num_junctions,num_roads,road_angles,road_lengths,junc_pairs,init_speeds,init_lanes,starts,dests):
+    def drawSimulation(self):
+        if self.g_sim is None:
+            self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars,self.traj)
+        self.g_sim.drawScene()
+
+    def initialiseSimulator(self,num_junctions,num_roads,road_angles,road_lengths,junc_pairs,init_speeds,starts,dests):
         if self.cars != []:
             self.junctions,self.roads,self.cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
-                                                    junc_pairs,self.cars,init_speeds,init_lanes,starts,dests)
+                                                    junc_pairs,self.cars,init_speeds,starts,dests)
 
-            if self.graphic: self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars)
+            if self.graphic: self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars,self.traj)
             self.runSensing()
             print("Initialisation Complete")
         else:
@@ -89,6 +95,7 @@ class Simulator():
             time.sleep(2)
             self.g_sim.shutdown()
 
+
 def listFixer(target_list,good_dim,choice_list):
     """Fixes the list provided as parameter so that it satisfies the requirements
        (i.e. has correct dimensionality). If the list is too long elements are removed.
@@ -104,11 +111,14 @@ def listFixer(target_list,good_dim,choice_list):
     if target_list is None:
         target_list = []
 
-    for i,entry in enumerate(target_list):
-        if len(entry)<good_dim[1]:
-            if good_dim[1] == 2:
-                target_list[i] = entry+[random.choice(choice_list[j])\
-                                     for j in range(len(entry),good_dim[1])]
+    #This is cheating but we assume that lists have at least one element, and the first element
+    # is consistent with the type for the full list. Done as int etc. do not have "len" defined
+    if not isinstance(target_list[0],int):
+        for i,entry in enumerate(target_list):
+            if len(entry)<good_dim[1]:
+                if good_dim[1] == 2:
+                    target_list[i] = entry+[random.choice(choice_list[j])\
+                                         for j in range(len(entry),good_dim[1])]
 
     if len(target_list) < good_dim[0]:
         print("Insufficient Number of Coordinates Provided")
@@ -129,7 +139,7 @@ def listFixer(target_list,good_dim,choice_list):
 def putCarsOnMap(cars,road_dict,start=None,dest_list=None,car_speeds=None):
     """Constructs the car objects and assigns them coordinates that puts them on either
        specified lanes or else randomly chooses lanes to put them on."""
-    lane = None
+    num_cars = len(cars)
 
     #car_lanes is the parameter that specifies what lanes the cars should be put in
     # If car_lanes is None then no lanes have been specified so they will be assigned
@@ -149,7 +159,7 @@ def putCarsOnMap(cars,road_dict,start=None,dest_list=None,car_speeds=None):
 
 
 def constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,\
-                         cars,car_speeds,car_lanes,start,destinations):
+                         cars,car_speeds,start,destinations):
 
     junctions,road_dict = map_builder.buildMap(num_junctions,num_roads,road_angles,\
                                            road_lengths,junc_pairs)
@@ -193,7 +203,7 @@ def storePerformance(performance_list,step_size):
 
 
 def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                controllers,accel_cats,angle_cats,run_graphics,debug,car_speeds=None,car_lanes=None):
+                controllers,accel_cats,angle_cats,run_graphics,draw_traj,debug,car_speeds=None):
 
     dist_to_obj = 0
     performance_list = []
@@ -202,14 +212,14 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
     next_states = [None for _ in range(num_cars)]
 
     cars = initialiseControlledCars(num_cars,controllers,accel_cats,angle_cats,debug)
-    simulator = Simulator(run_graphics,dt=.1)
+    simulator = Simulator(run_graphics,draw_traj,debug,dt=.1)
     simulator.loadCars(cars)
 
     for ep_num in range(num_episodes):
         #junctions,roads,cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
         #                                            junc_pairs,cars,car_speeds,car_lanes,debug)
         simulator.initialiseSimulator(num_junctions,num_roads,road_angles,road_lengths,\
-                                                    junc_pairs,car_speeds,car_lanes,starts,dests)
+                                                    junc_pairs,car_speeds,starts,dests)
 
         for i,car in enumerate(cars):
             cur_states[i] = car.composeState()
@@ -243,7 +253,7 @@ def runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_l
 
 
 def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  accel_cats,angle_cats,run_graphics,debug,starts,dests,car_speeds=None,car_lanes=None):
+                  accel_cats,angle_cats,run_graphics,draw_traj,debug,starts,dests,car_speeds=None):
     """This function runs the simulation given the specified parameters.
         num_junctions: - desired number of junctions in the map being created
         num_roads: - desired number of roads in the map being created
@@ -259,14 +269,14 @@ def runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc
         car_speeds: - optional parameter that, if provided, specifies the speeds each of the cars travels with
         car_lanes: - optional parameter that, if provided, specifies the lane each car starts in"""
     clock = 0
-    runtime = 10.0
+    runtime = 20.0
 
     cars = initialiseControlledCars(num_cars,[],accel_cats,angle_cats,debug)
-    simulator = Simulator(run_graphics,runtime,debug,dt=.1)
+    simulator = Simulator(run_graphics,draw_traj,runtime,debug,dt=.1)
     simulator.loadCars(cars)
 
     simulator.initialiseSimulator(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,\
-                                                car_speeds,car_lanes,starts,dests)
+                                                car_speeds,starts,dests)
 
     t0 = time.time()
     simulator.runComplete()
@@ -290,7 +300,7 @@ if __name__ == "__main__":
     num_roads = 5
     num_cars = 1
 
-    road_angles = [180,180,180,180,180]
+    road_angles = [0,0,0,0,0]
     road_lengths = [30,30,30,30,30]
 
     junc_pairs = [(0,1),(1,2),(2,3),(3,4),(4,5)]
@@ -300,7 +310,8 @@ if __name__ == "__main__":
     car_speeds = [5.5]
     car_lanes = [(0,1)]
 
-    run_graphics = False
+    run_graphics = True
+    draw_traj = True
     debug = True
 
     num_episodes = 10000
@@ -309,6 +320,6 @@ if __name__ == "__main__":
     #controllers = []
     #controllers = [controller_classes.DQNController("safe",accel_cats,angle_cats)]
     runSimulation(num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-                  accel_cats,angle_cats,run_graphics,debug,starts,dests)
+                  accel_cats,angle_cats,run_graphics,draw_traj,debug,starts,dests)
     #runTraining(num_episodes,num_junctions,num_roads,num_cars,road_angles,road_lengths,junc_pairs,\
-    #              controllers,accel_cats,angle_cats,run_graphics,debug,starts,dests,car_speeds,car_lanes)
+    #              controllers,accel_cats,angle_cats,run_graphics,draw_traj,debug,starts,dests,car_speeds,car_lanes)

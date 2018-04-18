@@ -1,4 +1,3 @@
-
 def computeWaypoint(stop_point,front_back_label):
     """Returns the coordinates of the midpoint of the specified side (front/back)
        of the stop_point."""
@@ -30,6 +29,9 @@ def assignDijkstraScore(start_junc,cur_score,label):
 
 
 def getShortestPath(start_point,end_point):
+    """Given a start point (lane) and end point (junction) returns the trajectory
+       (list of junctions) and waypoints (coordinates to aim for) of the shortest
+       path linking the two points together."""
     next_stop = start_point.to_junction #next_stop is junction next to be entered
     trajectory = []
     waypoints = []
@@ -54,6 +56,7 @@ def getShortestPath(start_point,end_point):
         next_stop = min_lane.to_junction
         trajectory.append(min_lane.to_junction)
         cur_score = min_score
+    return trajectory,waypoints
 
 
 def buildTrajectory(start_point,end_point):

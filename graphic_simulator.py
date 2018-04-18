@@ -5,7 +5,7 @@ WHITE = (255,255,255)
 
 
 class GraphicSimulator():
-    def __init__(self,junctions,roads,cars):
+    def __init__(self,junctions,roads,cars,draw_traj):
         #Initialise the pygame instance
         pygame.init()
 
@@ -24,6 +24,8 @@ class GraphicSimulator():
         #This is true if pygame detects that x button is clicked.
         # If true then graphic will close but simulation will continue to run
         self.is_quit = False
+
+        self.draw_traj = draw_traj
 
         #Initialise the background and the screen that the graphics get written onto
         self.initialiseBackground(width,height)
@@ -62,6 +64,12 @@ class GraphicSimulator():
             for lizt in [self.junc_list,self.road_list,self.car_list]:
                 self.drawToScreen(lizt)
 
+            if self.draw_traj:
+                for car in self.car_list:
+                    traj_coords = [[car.obj.x_com,car.obj.y_com]] + \
+                            car.obj.waypoints[car.obj.traj_posit:]
+                    drawTrajectory(traj_coords,self.unit,self.screen)
+
             self.clock.tick(10)
             pygame.display.flip()
 
@@ -72,6 +80,7 @@ class GraphicSimulator():
 
 
     def shutdown(self):
+        """Store the final image from the simulation and then shut down the pygame instance"""
         pygame.image.save(self.screen,"screenshot.jpeg")
         pygame.quit()
         self.is_quit = True
@@ -84,6 +93,19 @@ class GraphicSimulator():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 self.is_quit = True
+
+    def drawScene(self):
+        """Used for inspecting static moments without progressing in the simulation.
+           Repeatedly draws the current state of the simulation until a keyboard key is pressed"""
+        acts = [x.type for x in pygame.event.get()]
+        while pygame.KEYDOWN not in acts and pygame.QUIT not in acts:
+            self.update()
+            acts = [x.type for x in pygame.event.get()]
+
+
+def drawTrajectory(coords,unit,screen):
+    coords = [[unit*x[0],unit*x[1]] for x in coords]
+    pygame.draw.lines(screen,(0,255,0),False,coords)
 
 
 def updateList(obj_list,unit):
@@ -106,7 +128,7 @@ def makeSpriteGroup(obj_list,width,height,unit):
 
 
 def setUnitVal(junctions,height,width):
-    """Set the scaling constant for the simulator so that the graphics don't 
+    """Set the scaling constant for the simulator so that the graphics don't
        go off the screen"""
     max_height = -1
     max_width = -1
