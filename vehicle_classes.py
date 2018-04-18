@@ -490,34 +490,6 @@ def computeTrajectoryPoint(stop_point,front_back_label):
     pt = ((fl[0] + fr[0])/2,(fl[1]+fr[1])/2)
     return pt
 
-"""def buildTrajectory(start_point):
-    next_stop = start_point.to_junction #next_stop is junction next to be entered
-    trajectory = []
-    waypoints = []
-    pt = computeTrajectoryPoint(start_point,"front")
-    trajectory.append(next_stop)
-    waypoints.append(pt)
-    #Trajectories must be at least 3 stops long but no more than 9
-    while len(trajectory)<5 and (len(trajectory)<2 or random.random()<.5):
-        #Choosing a lane out of the junction to add to the trajectory
-        while next_stop in trajectory:
-            next_stop = random.choice(next_stop.out_lanes)
-        #pt = computeTrajectoryPoint(next_stop,"back")
-        #trajectory.append(next_stop.road) #Here next_stop is the lane that leads out of the junction
-        #waypoints.append(pt)
-
-        #Adding the junction the current lane leads into
-        pt = computeTrajectoryPoint(next_stop,"front")
-        next_stop = next_stop.to_junction
-        trajectory.append(next_stop)
-        waypoints.append(pt)
-        #Here we are allowing loops to form in the trajectory. But they end the trajectory
-        #if the current junction was previously in the trajectory then it is a terminal point
-        if next_stop in trajectory[:-1]: break
-        #In this case the only exit would require a U-turn which is beyond the scope of our current intentions
-        if len(next_stop.out_lanes)==1: break
-    return trajectory,waypoints
-"""
 
 def assignDijkstraScore(start_junc,cur_score,label):
     #This uses Dijkstra's method to assign values to every lane on the map according to its
