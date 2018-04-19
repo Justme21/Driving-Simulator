@@ -44,6 +44,7 @@ class Simulator():
             self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars,self.traj)
         self.g_sim.drawScene()
 
+
     def initialiseSimulator(self,num_junctions,num_roads,road_angles,road_lengths,junc_pairs,init_speeds,starts,dests):
         if self.cars != []:
             self.junctions,self.roads,self.cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
@@ -51,17 +52,14 @@ class Simulator():
 
             if self.graphic: self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars,self.traj)
             self.runSensing()
-            print("Initialisation Complete")
+            if self.debug:
+                print("Initialisation Complete")
         else:
             print("Error: No Cars Loaded")
             exit(-1)
 
         if self.debug:
             map_builder.printContents(self.junctions[0])
-            print("HERE NOW")
-            for entry in self.junctions[0].out_lanes:
-                print(entry.label)
-            print("\n")
 
 
     def singleStep(self):
@@ -113,7 +111,7 @@ def listFixer(target_list,good_dim,choice_list):
 
     #This is cheating but we assume that lists have at least one element, and the first element
     # is consistent with the type for the full list. Done as int etc. do not have "len" defined
-    if not isinstance(target_list[0],int):
+    if len(target_list)>0 and not isinstance(target_list[0],int):
         for i,entry in enumerate(target_list):
             if len(entry)<good_dim[1]:
                 if good_dim[1] == 2:
@@ -304,7 +302,7 @@ if __name__ == "__main__":
     road_lengths = [30,30,30,30,30]
 
     junc_pairs = [(0,1),(1,2),(2,3),(3,4),(4,5)]
-    starts = [[(0,1)]]
+    starts = [[(0,1),1]]
     dests = [[(4,5)]]
 
     car_speeds = [5.5]

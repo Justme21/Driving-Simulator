@@ -63,7 +63,6 @@ def buildTrajectory(start_point,end_point):
     """Returns the Trajectory (composed of junction objects) and the Waypoints
        (composed of the coordinates of the end of the appropriate lane that leads into
        the corresponding junction) joining the start and end points together"""
-    print("SP: {}".format(start_point.label))
     trajectory,waypoints = getShortestPath(start_point,end_point)
     return trajectory,waypoints
 

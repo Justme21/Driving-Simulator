@@ -161,7 +161,10 @@ class Car():
 
         #Initialise Trajectory and Waypoint
         #dest also contains [0,1] lane specification, but for the time being we don't use that
-        destination = dest[0].top_up_lane.to_junction
+        if dest[1]:
+            destination = dest[0].top_up_lane.to_junction
+        else:
+            destination = dest[0].bottom_down_lane.to_junction
         self.traj_posit = 0
         self.trajectory,self.waypoints = trajectory_builder.initialiseTrajectory(road,is_top_lane,destination)
         if self.debug:
