@@ -297,7 +297,7 @@ class Lane():
                 self.four_corners[entry] = None
         setFourCorners(self,corner,coords)
 
-    
+
     def printStatus(self,mod=""):
         """Prints properties of the lane during debugging"""
         dims = ""

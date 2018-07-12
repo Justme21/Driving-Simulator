@@ -17,13 +17,13 @@ class GraphicWrapper(pygame.sprite.Sprite):
         self.image = None
         self.overwrite = overwrite
         if isinstance(obj,vehicle_classes.Car):
-            self.default_color = BLUE
+            if obj.is_ego:
+                self.default_color = BLUE
+            else:
+                self.default_color = RED
         else:
             self.default_color = BLACK
-        self.backup_color = GREEN
-        if isinstance(obj,road_classes.Lane):
-            if not obj.is_top_up:
-                self.backup_color = RED
+        
         if surface is None:
             self.surface = pygame.Surface((width,height))
             self.surface.fill(INVIS)

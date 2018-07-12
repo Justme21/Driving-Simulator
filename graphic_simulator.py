@@ -14,6 +14,7 @@ class GraphicSimulator():
         width = 1024
 
         #Define the unit value to ensure the graphic doesn't go off the screen
+        #Unit defines the length of a metre in the simulation
         self.unit = setUnitVal(junctions,height,width)
 
         #Initialise the sprite groups for the junctions, the roads and the cars 

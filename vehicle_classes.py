@@ -3,13 +3,15 @@ import random
 import road_classes
 import trajectory_builder
 
-#Dimensions are those of a "Ford Focus 5-door 1.8i Zetec" as found at
-# http://www.metric.org.uk/motoring  . Units are metres
-car_length = 4.17
-car_width = 1.7
+#Values corresponding to a Volvo S60 (values found at https://www.auto123.com/en/new-cars/technical-specs/volvo/s60/2018/base/t5-base-awd/#dimensions)
+#Same vehicle used in "model-based threat assessment for avoiding arbitrary vehicle collisions"-Br\{"}annstr\{"}om
+car_length = 4.635
+car_width = 2.097
+
+#Alternative values could be length=5m, width=2 as per "model-based threat assessment for avoiding arbitrary vehicle collisions"-Br\{"}annstr\{"}om
 
 class Car():
-    def __init__(self,controller,is_ego,label,debug,timestep=.1):
+    def __init__(self,controller,is_ego,label,debug=False,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -21,9 +23,9 @@ class Car():
                              "back_right":None}
 
         #Velocity and accelerations of the car of the car
-        self.v = None
-        self.accel = 0
-        self.turn_accel = 0
+        self.v = None #units are metres per second
+        self.accel = 0 # metres per second squared
+        self.turn_accel = 0 #radians/degrees per metres squared (?)
 
         #Heading of the car (direction it is facing in degrees)
         self.heading = None
@@ -35,13 +37,27 @@ class Car():
         self.length = car_length
         self.width = car_width
 
+
+        #Kinematic Bicycle model (The Kinematic Bicycle Model: a Consistent Model for Planning Feasible Trajectories for Autonomous Vehicles?)
+        #Philip Polack, Florent Altché, Brigitte D’Andréa-Novel, Arnaud De La Fortelle
+        self.Lr = 1.61 #Distance from COM to rear axle
+        self.Lf = 1.11 #Distance from COM to front axle
+        #The remaining two parameters are included in the referenced paper, but are we do not use
+        #These would be used in the Dynamic Bicycle model
+        #self.L0 = 4 #Distance from front of car to rear axle
+        #self.n = 16.25 #Steering ratio
+        #self.Kf = .009 #Normalised front cornering compliance
+        #self.Kr = .006 #Normalised read cornering compliance
+        #tda = .05 #time delay used for accelerating/braking manoeuvres
+        #tdd = .03 #time delay used for turning manoeuvres
+
         #The object (road or junction) that the car is on
         #This is a list as the car might be straddling a lane and junction
         #Or two lanes
         self.on = []
 
         #The processing speed of the car (how often it changes it's action)
-        self.timestep = timestep
+        self.timestep = timestep #unit is seconds
         self.debug = debug
 
         #Sense Variables
@@ -52,21 +68,20 @@ class Car():
         self.label = "C{}".format(label)
 
         #Trajectory and Waypoint
-        self.destination = None
-        self.traj_posit = None
-        self.trajectory = None
-        self.waypoints = None
+        self.destination = None #Road object that is what the car is (theoretically) going towards
+        self.traj_posit = None #Index giving position along the trajectory
+        self.trajectory = None #List of junctions that connect current lane to the destination
+        self.waypoints = None #Coordinates of entries in trajectory
+        self.waypoint_distance = None
 
         #Initialise Public and Private State
         self.pub_state = None
         self.priv_state = None
 
-        self.repo_len = int((1/timestep)*2) #Store the past 2 seconds of state information
-        self.public_state_repo = []
-
         self.controller = controller
         #Initialise time. Used to record how long it takes to achieve an objective
         self.time = 0
+        self.initialisation_params = []
 
 
     def distToObj(self):
@@ -114,9 +129,10 @@ class Car():
             obj.takeOff(self)
 
 
-    def initSetup(self,road_lane,dest,v):
+    def initSetup(self,road_lane,dest,v,prev_disp_x=None,prev_disp_y=None):
         """Performing initial setup of the car. Input is reference to lane that the
            vehicle is generated on."""
+        self.on = []
         lane = None
         road = road_lane[0]
         is_top_lane = bool(road_lane[1])
@@ -135,9 +151,15 @@ class Car():
         # parallel to the course of the road
         self.heading = lane.direction
 
-        x_disp = round(lane.width/2,2)
-        #Randomly place the car somewhere along the length of the road
-        y_disp = round((self.length/2)+ random.random()*(lane.length-self.length),2)
+        if prev_disp_x is None:
+            x_disp = round(lane.width/2,2)
+        else: x_disp = prev_disp_x
+
+        if prev_disp_y is None:
+            #Randomly place the car somewhere along the length of the road
+            y_disp = round((self.length/2)+ random.random()*(lane.length-self.length),2)
+        else:
+            y_disp = prev_disp_y
         direction = self.heading
         disp = angularToCartesianDisplacement(x_disp,y_disp,direction)
 
@@ -173,17 +195,61 @@ class Car():
 
         self.checkPositState()
 
+        self.initialisation_params = [road_lane,dest,v,x_disp,y_disp]
+
+
+    def reinitialise(self):
+        params = self.initialisation_params
+        self.time = 0
+        self.initSetup(*params)
+
 
     def composeState(self):
-        return self.pub_state+self.priv_state
+        """Merges the public and private states into a single dictionary leaving both states unchanged"""
+        pass_state = {}
+        pass_state.update(self.pub_state)
+        pass_state.update(self.priv_state)
+        return pass_state
 
 
     def chooseAction(self):
-        # It is possibly unnecessary to recompose the state when the simulator already
-        # composed it, but it is a reasonably simple operation so it is not worth
-        # stressing over
+        """Merge the public and private states and pass this to the vehicle controller to get linear and angular accelerations"""
         state = self.composeState()
         self.accel,self.turn_accel = self.controller.selectAction(state)
+
+
+    def setAction(self,lin_accel,turn_accel):
+        self.accel = lin_accel
+        self.turn_accel = turn_accel
+
+
+    def setMotionParams(self,posit=None,vel=None):
+        if posit is not None:
+            self.x_com = posit[0]
+            self.y_com = posit[1]
+        if vel is not None:
+            self.v = vel
+
+
+    def simulateDynamics(self,lin_accel,angle_accel):
+        """Simulate the consequences of applying linear acceleration v_dot and angular acceleration
+           head_dot on the current state of the car using the specified vehicle dynamics"""
+        slip_angle = math.atan(math.tan(angle_accel)*self.Lr/(self.Lr+self.Lf))
+
+        heading_dot = (self.v/self.Lr)*math.sin(slip_angle)
+        v_dot = lin_accel
+
+        #It is a bit wasteful to do this computation here and then again when called in "move"
+        # but by not having simulate Dynamics actually affect the agent it means other programs
+        # can use it
+        v = self.v + v_dot*self.timestep
+        heading = self.heading + heading_dot*self.timestep
+
+
+        x_dot = v*math.cos(math.radians(heading)+slip_angle)
+        y_dot = -v*math.sin(math.radians(heading)+slip_angle)
+
+        return x_dot,y_dot,v_dot,heading_dot
 
 
     def move(self):
@@ -191,19 +257,16 @@ class Car():
            angle this determines how much the vehicle should move, and then resets the
            vehicles coordinates appropriately."""
 
-        head_dot = self.turn_accel
-        v_dot = self.accel
+        x_dot,y_dot,v_dot,heading_dot = self.simulateDynamics(self.accel,self.turn_accel)
 
-        self.v += self.timestep*v_dot
-        self.heading += self.timestep*head_dot
-        #The changes induced by the dynamics
-        x_dot = self.v*math.cos(math.radians(self.heading))
-        #y_dot is set as negative to reflect the fact the pygame coordinate space
-        y_dot = -self.v*math.sin(math.radians(self.heading))
-
-        #Applying the changes calculated above
-        self.y_com += self.timestep*y_dot
         self.x_com += self.timestep*x_dot
+        self.y_com += self.timestep*y_dot
+
+        self.v += v_dot*self.timestep
+        self.heading += heading_dot*self.timestep
+
+        self.time += self.timestep
+
         self.setFourCorners()
 
 
@@ -354,110 +417,44 @@ class Car():
 
         #Progress the Trajectory Goal
         on = None
-        for entry in self.on:
-            on = entry
-            if isinstance(on,road_classes.Lane):
-                on = on.road
-            if on is self.trajectory[self.traj_posit]:
-                self.traj_posit += 1
-                break
-        if self.traj_posit == len(self.trajectory): self.is_complete = True
+        if self.traj_posit<len(self.trajectory):
+            for entry in self.on:
+                on = entry
+                if isinstance(on,road_classes.Lane):
+                    on = on.road
+                if on is self.trajectory[self.traj_posit]:
+                    self.traj_posit += 1
+                    break
+
+        if self.traj_posit == len(self.trajectory):
+            if not self.is_ego: self.is_complete = True
+            elif self.waypoint_distance is not None and computeDistance([self.x_com,self.y_com],self.waypoints[-1])>self.waypoint_distance:
+                self.is_complete = True
+
         if self.is_complete and not self.is_ego:
-            next_lane = random.choice(on.out_lanes)
-            self.trajectory,self.waypoints = initialiseTrajectory(next_lane,next_lane.is_top_up)
+            next_lane = random.choice(on.out_lanes) #You are on a junction and choose a direction by choosing the lane to aim for
+            destination = random.choice(next_lane.to_junction.out_lanes).to_junction #Trajectory ends at a junction
+            self.trajectory,self.waypoints = trajectory_builder.initialiseTrajectory(next_lane.road,next_lane.is_top_up,destination)
             self.traj_posit = 0
             self.is_complete = False
 
+        if self.traj_posit < len(self.waypoints):
+            self.waypoint_distance = computeDistance([self.x_com,self.y_com],self.waypoints[self.traj_posit])
+        else: self.waypoint_distance = computeDistance([self.x_com,self.y_com],self.waypoints[-1])
+
 
     def updatePublicState(self):
-        state = []
-        #Position of the vehicle. Mainly for relative computation for other cars
-        #NOTE: Come back to this later. It seems clear that this will not be useful in computing
-        # the ego state.
-        #state += [self.x_com,self.y_com]
-
-        #Velocity parallel and perpendicular to the current road
-        alpha = self.heading
-        i = 0
-        while i<len(self.on) and not (isinstance(self.on[i],road_classes.Lane) or\
-                   isinstance(self.on[i],road_classes.Junction)): i+=1
-        if i == len(self.on):
-            if self.debug:
-                print("No Road/Junction found in on: ")
-                print("Car is: {}".format(self.printStatus()))
-                print("Self.on:")
-                for entry in self.on:
-                    print("\t{}".format(entry.printStatus()))
-                print("")
-            beta = alpha
-        else:
-            beta = self.on[i].direction
-        v_par = self.v*math.cos(math.radians(alpha-beta))
-        v_perp = self.v*math.sin(math.radians(alpha-beta))
-        state += [v_par,v_perp]
-
-        #Heading
-        #state.append(self.heading)
-        state.append(beta-alpha)
-
-        if i==len(self.on):
-            state.append(1)
-        else:
-            on_lanes = [x.direction for x in self.on if isinstance(x,road_classes.Lane)]
-            if on_lanes != []:
-                state.append(int(90<min([abs(self.heading-x) for x in on_lanes])))
-            else: state.append(0)
+        state = {}
+        state["position"] = (self.x_com,self.y_com)
+        state["velocity"] = self.v
+        state["acceleration"] = self.accel
+        state["four_corners"] = self.four_corners
 
         self.pub_state = state
 
-        while len(self.public_state_repo)>=self.repo_len: del(self.public_state_repo[0])
-        self.public_state_repo.append(state)
-
 
     def updatePrivateState(self):
-        state = []
-        #The time the vehicle has been runnning on this trajectory for
-        state.append(self.time)
-
-        #Identify relevant trajectory elements
-        if self.is_complete:
-            #In this case the state will have just changed but won't have been picked up by
-            # the simulator yet. 
-            waypt = self.waypoints[self.traj_posit-1]
-            obj = self.trajectory[self.traj_posit-1]
-        else:
-            waypt = self.waypoints[self.traj_posit]
-            obj = self.trajectory[self.traj_posit]
-
-        #The distance from the next waypoint in the trajectory
-        ego_com = (self.x_com,self.y_com)
-        state.append(computeDistance(ego_com,waypt))
-
-        #The perpendicular distance to either side of the lane/junction
-        if obj.direction%180 == 90:
-            state.append(math.fabs(ego_com[0]-obj.four_corners["back_right"][0]))
-            state.append(math.fabs(ego_com[0]-obj.four_corners["back_left"][0]))
-        else:
-            slope = math.tan(obj.direction)
-            coord_right = obj.four_corners["back_right"]
-            coord_left = obj.four_corners["back_left"]
-            #Formula for perpendicular distance between point and a line in form Ax+By+C
-            # where A = -slope, B=1 and C=(slope*x1-y1)
-            # d = |Ax+By+c|/<sqrt>(A^2+B^2)
-            state.append(math.fabs(-slope*ego_com[0]+ego_com[1]+(slope*coord_right[0]-coord_right[1]))/\
-                    math.sqrt(slope**2+1))
-            state.append(math.fabs(-slope*ego_com[0]+ego_com[1]+(slope*coord_left[0]-coord_left[1]))/\
-                    math.sqrt(slope**2+1))
-
-        #The current acceleration and angular acceleration
-        state.append(self.accel)
-        state.append(self.turn_accel)
-        #Whether or not the car has crashed and whether or not it is still on the road
-        state.append(int(self.crashed))
-        state.append(int(self.on_road))
-        state.append(int(self.is_complete))
-        state.append(self.distToObj())
-
+        state = {}
         self.priv_state = state
 
 
@@ -470,9 +467,6 @@ class Car():
         self.updatePublicState()
         #Update the Private state values
         self.updatePrivateState()
-        #print("THIS IS SENSED STATE: {}-{}".format(self.pub_state,self.priv_state))
-        #exit(-1)
-        if self.controller.model is None: self.controller.initialiseModel(len(self.composeState()))
 
 
     def printStatus(self,mod=""):
@@ -482,8 +476,8 @@ class Car():
         for x in self.four_corners:
             dims += "{}({},{}), ".format(corner_labels[x],round(self.four_corners[x][0],2),\
                                          round(self.four_corners[x][1],2))
-        print("{}{}\tON: {}\tHEAD: {}\tSPEED: {}\n{}\t {}".format(mod,\
-               self.label,[x.label for x in self.on],self.heading,self.v,\
+            print("{}{}\tON: {}\tHEAD: {}\tSPEED: {}\tACCEL: ({},{})\n{}\t {}".format(mod,\
+               self.label,[x.label for x in self.on],self.heading,self.v,self.accel,self.turn_accel,\
                self.label,dims))
 
 
@@ -545,11 +539,11 @@ def sideOfLine(pt,line_strt,line_end):
 
 
 def angularToCartesianDisplacement(x_disp,y_disp,direction):
-    """Translates a displacement in a specified direction into displacement along the 
+    """Transl:ates a displacement in a specified direction into displacement along the 
        standard basis axes"""
     phi = math.sqrt(x_disp**2 + y_disp**2)
     delta = math.degrees(math.atan(x_disp/y_disp))
     omega = direction + delta
 
     return (-phi*math.cos(math.radians(omega)),phi*math.sin(math.radians(\
-           omega)))
+            omega)))
