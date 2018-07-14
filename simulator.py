@@ -115,8 +115,11 @@ class Simulator():
             if move_dict is None:
                 self.singleStep()
             else:
-                self.singleStep(move_dict,i)
-                i+=1
+                try:
+                    self.singleStep(move_dict,i)
+                    i+=1
+                except IndexError: #messy way to break out of while loop when car can still move but out of entries in trajectory
+                    break
             self.time += self.dt
             self.endStep()
 
