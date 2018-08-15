@@ -268,6 +268,7 @@ class Car():
         self.time += self.timestep
 
         self.setFourCorners()
+        self.updatePublicState()
 
 
     def checkNewOn(self):

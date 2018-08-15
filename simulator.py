@@ -95,7 +95,10 @@ class Simulator():
             if move_dict is None or car not in move_dict:
                 car.chooseAction()
             else:
-                car.setAction(move_dict[car][index][0],move_dict[car][index][1])
+                if index<len(move_dict[car]):
+                    car.setAction(move_dict[car][index][0],move_dict[car][index][1])
+                else:
+                    car.setAction(0,0)
             car.move()
         if self.graphic: self.g_sim.update()
         self.runSensing()
