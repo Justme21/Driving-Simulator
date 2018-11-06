@@ -25,7 +25,7 @@ class Car():
         #Velocity and accelerations of the car of the car
         self.v = None #units are metres per second
         self.accel = 0 # metres per second squared
-        self.turn_accel = 0 #radians/degrees per metres squared (?)
+        self.turn_angle= 0 #radians/degrees per metres squared (?)
 
         #Heading of the car (direction it is facing in degrees)
         self.heading = None
@@ -203,7 +203,6 @@ class Car():
         self.time = 0
         self.initSetup(*params)
 
-
     def composeState(self):
         """Merges the public and private states into a single dictionary leaving both states unchanged"""
         pass_state = {}
@@ -215,26 +214,30 @@ class Car():
     def chooseAction(self):
         """Merge the public and private states and pass this to the vehicle controller to get linear and angular accelerations"""
         state = self.composeState()
-        self.accel,self.turn_accel = self.controller.selectAction(state)
+        self.accel,self.turn_angle = self.controller.selectAction(state)
 
 
-    def setAction(self,lin_accel,turn_accel):
-        self.accel = lin_accel
-        self.turn_accel = turn_accel
+    def setAction(self,accel=None,turn_angle=None):
+        if accel is not None:
+            self.accel = accel
+        if turn_angle is not None:
+            self.turn_angle = turn_angle
 
 
-    def setMotionParams(self,posit=None,vel=None):
+    def setMotionParams(self,posit=None,heading=None,vel=None):
         if posit is not None:
             self.x_com = posit[0]
             self.y_com = posit[1]
+        if heading is not None:
+            self.heading = heading
         if vel is not None:
             self.v = vel
 
 
-    def simulateDynamics(self,lin_accel,angle_accel):
+    def simulateDynamics(self,lin_accel,turn_angle):
         """Simulate the consequences of applying linear acceleration v_dot and angular acceleration
            head_dot on the current state of the car using the specified vehicle dynamics"""
-        slip_angle = math.atan(math.tan(angle_accel)*self.Lr/(self.Lr+self.Lf))
+        slip_angle = math.atan(math.tan(math.radians(turn_angle))*self.Lr/(self.Lr+self.Lf))
 
         heading_dot = (self.v/self.Lr)*math.sin(slip_angle)
         v_dot = lin_accel
@@ -252,20 +255,22 @@ class Car():
         return x_dot,y_dot,v_dot,heading_dot
 
 
-    def move(self):
+    def move(self,num_timesteps=1):
         """The motion dynamics of the vehicle. Given an input acceleration and wheel-
            angle this determines how much the vehicle should move, and then resets the
            vehicles coordinates appropriately."""
 
-        x_dot,y_dot,v_dot,heading_dot = self.simulateDynamics(self.accel,self.turn_accel)
+        num_timesteps = max(1,int(num_timesteps)) #Ensure the number of timesteps is always an integer
 
-        self.x_com += self.timestep*x_dot
-        self.y_com += self.timestep*y_dot
+        x_dot,y_dot,v_dot,heading_dot = self.simulateDynamics(self.accel,self.turn_angle)
 
-        self.v += v_dot*self.timestep
-        self.heading += heading_dot*self.timestep
+        self.x_com += self.timestep*num_timesteps*x_dot
+        self.y_com += self.timestep*num_timesteps*y_dot
 
-        self.time += self.timestep
+        self.v += v_dot*self.timestep*num_timesteps
+        self.heading += heading_dot*self.timestep*num_timesteps
+
+        self.time += self.timestep*num_timesteps
 
         self.setFourCorners()
         self.updatePublicState()
@@ -449,6 +454,7 @@ class Car():
         state["position"] = (self.x_com,self.y_com)
         state["velocity"] = self.v
         state["acceleration"] = self.accel
+        state["turn_angle"] = self.turn_angle
         state["four_corners"] = self.four_corners
 
         self.pub_state = state
@@ -478,7 +484,7 @@ class Car():
             dims += "{}({},{}), ".format(corner_labels[x],round(self.four_corners[x][0],2),\
                                          round(self.four_corners[x][1],2))
             print("{}{}\tON: {}\tHEAD: {}\tSPEED: {}\tACCEL: ({},{})\n{}\t {}".format(mod,\
-               self.label,[x.label for x in self.on],self.heading,self.v,self.accel,self.turn_accel,\
+               self.label,[x.label for x in self.on],self.heading,self.v,self.accel,self.turn_angle,\
                self.label,dims))
 
 

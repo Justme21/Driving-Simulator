@@ -36,6 +36,8 @@ class Simulator():
         self.debug = debug #Debug prints debug text littered throughout the code
         self.dt = dt #size of a timestep in the simulator
 
+        self.min_dist = []
+
 
     def loadCars(self,car_list):
         """Loads a list of initialised cars into the simulator.
@@ -100,6 +102,8 @@ class Simulator():
                 else:
                     car.setAction(0,0)
             car.move()
+        dist = math.sqrt((self.cars[0].x_com-self.cars[1].x_com)**2 + (self.cars[0].y_com-self.cars[1].y_com)**2)
+        self.min_dist.append(dist)
         if self.graphic: self.g_sim.update()
         self.runSensing()
 
