@@ -1,4 +1,4 @@
-import controller_classes
+import linear_controller_classes as lcc
 import datetime
 import graphic_simulator
 import map_builder
@@ -88,6 +88,16 @@ class Simulator():
             map_builder.printContents(self.junctions[0])
 
 
+    def reinitialise(self):
+        """Resets all the moving objects on the map back to their initial settings"""
+        for car in self.cars:
+            car.reinitialise()
+
+        #Re-sense after every car has moved to it's new location
+        for car in self.cars:
+            car.sense()
+
+
     def singleStep(self,move_dict=None,index=None):
         """Runs a single timestep of the simulator. Each car chooses an action and moves according to the action.
            After all cars have moved the graphical element is updated and all cars sense the changes in the environment
@@ -102,8 +112,8 @@ class Simulator():
                 else:
                     car.setAction(0,0)
             car.move()
-        dist = math.sqrt((self.cars[0].x_com-self.cars[1].x_com)**2 + (self.cars[0].y_com-self.cars[1].y_com)**2)
-        self.min_dist.append(dist)
+        #dist = math.sqrt((self.cars[0].x_com-self.cars[1].x_com)**2 + (self.cars[0].y_com-self.cars[1].y_com)**2)
+        #self.min_dist.append(dist)
         if self.graphic: self.g_sim.update()
         self.runSensing()
 
@@ -235,12 +245,12 @@ def constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,junc_p
 
 def canGo(cars):
     """Indicates whether the simulator should continue or terminate"""
-    if cars[0].is_complete:
-        return False #If the ego vehicle (default cars[0]) has completed its objective it can go
+    can_go = False
     for car in cars:
         if car.crashed or not car.on_road:
             return False #If a car has crashed the simulation should stop
-    return True
+        if not car.is_complete: can_go = True
+    return can_go
 
 
 def initialiseControlledCars(num_cars,controllers,accel_range,angle_range,debug):
@@ -248,12 +258,12 @@ def initialiseControlledCars(num_cars,controllers,accel_range,angle_range,debug)
        get random action controllers by default. First car initialised (with the first provided controller) is the ego
        vehicle by default.
        num_cars: [int] number of cars to be initialised
-       controllers: [list] list of controller_classes objects to be assigned to the cars
+       controllers: [list] list of linear_controller_classes objects to be assigned to the cars
        accel_range: [list] list indicating the lower and upper range for the linear acceleration
        angle_range: [list] list inidicating the lower and upper range for the angular acceleration
        debug: [bool] indicates whether or not debug print statements should be printed"""
     cars = []
-    controllers += [controller_classes.RandomController(accel_range,angle_range) for _ in range(num_cars-len(controllers))]
+    controllers += [lcc.RandomController(accel_range,angle_range) for _ in range(num_cars-len(controllers))]
     is_ego = True
     for i in range(num_cars):
         cars.append(vehicle_classes.Car(controllers[i],is_ego,i,debug))

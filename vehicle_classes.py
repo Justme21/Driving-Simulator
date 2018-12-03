@@ -11,7 +11,7 @@ car_width = 2.097
 #Alternative values could be length=5m, width=2 as per "model-based threat assessment for avoiding arbitrary vehicle collisions"-Br\{"}annstr\{"}om
 
 class Car():
-    def __init__(self,controller,is_ego,label,debug=False,timestep=.1):
+    def __init__(self,controller,is_ego,label,debug=False,is_demo=True,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -24,8 +24,8 @@ class Car():
 
         #Velocity and accelerations of the car of the car
         self.v = None #units are metres per second
-        self.accel = 0 # metres per second squared
-        self.turn_angle= 0 #radians/degrees per metres squared (?)
+        self.accel = None # metres per second squared
+        self.turn_angle= None #radians/degrees per metres squared (?)
 
         #Heading of the car (direction it is facing in degrees)
         self.heading = None
@@ -64,6 +64,8 @@ class Car():
         self.on_road = True #Check if car still on road
         self.crashed = False #Check if car has crashed into something
         self.is_complete = False
+        self.in_demo = is_demo #if car is in demo mode then all non-ego cars cycle through objectives (see is_complete). 
+                               #When not in demo is_complete for non-ego is not reset
 
         self.label = "C{}".format(label)
 
@@ -79,6 +81,8 @@ class Car():
         self.priv_state = None
 
         self.controller = controller
+        #Keeps track of permissible controllers for a vehicle
+        self.controllers = {"default": controller}
         #Initialise time. Used to record how long it takes to achieve an objective
         self.time = 0
         self.initialisation_params = []
@@ -129,7 +133,7 @@ class Car():
             obj.takeOff(self)
 
 
-    def initSetup(self,road_lane,dest,v,prev_disp_x=None,prev_disp_y=None):
+    def initSetup(self,road_lane,dest,v,accel=0,turn_angle=0,prev_disp_x=None,prev_disp_y=None):
         """Performing initial setup of the car. Input is reference to lane that the
            vehicle is generated on."""
         self.on = []
@@ -181,6 +185,9 @@ class Car():
 
         self.v = v
 
+        self.accel = accel
+        self.turn_angle = turn_angle
+
         #Initialise Trajectory and Waypoint
         #dest also contains [0,1] lane specification, but for the time being we don't use that
         if dest[1]:
@@ -195,13 +202,14 @@ class Car():
 
         self.checkPositState()
 
-        self.initialisation_params = [road_lane,dest,v,x_disp,y_disp]
+        self.initialisation_params = [road_lane,dest,v,accel,turn_angle,x_disp,y_disp]
 
 
     def reinitialise(self):
         params = self.initialisation_params
         self.time = 0
         self.initSetup(*params)
+
 
     def composeState(self):
         """Merges the public and private states into a single dictionary leaving both states unchanged"""
@@ -234,12 +242,37 @@ class Car():
             self.v = vel
 
 
+    def setController(self,tag=None,controller=None):
+        if controller is not None:
+            if controller not in [self.controllers[x] for x in self.controllers]:
+                print("Error: Controller can't be set as this controller has not been added to the vehicle")
+                print("Controller: {}\tLoaded Controllers: {}".format(controller,self.controllers))
+                exit(-1) #Should this be an exit?
+            else:
+                self.controller = controller
+        elif tag is not None:
+            if tag not in self.controllers:
+                print("Error: Controller can't be set as this controller has not been added to the vehicle")
+                print("Controller: {}\tLoaded Controllers: {}".format(tag,self.controllers))
+                exit(-1)
+            else:
+                self.controller = self.controllers[tag]
+        else:
+            print("Error: No controller specified")
+            exit(-1)
+
+
+    def addControllers(self,controller_dict):
+        self.controllers.update(controller_dict)
+
+
     def simulateDynamics(self,lin_accel,turn_angle):
         """Simulate the consequences of applying linear acceleration v_dot and angular acceleration
            head_dot on the current state of the car using the specified vehicle dynamics"""
         slip_angle = math.atan(math.tan(math.radians(turn_angle))*self.Lr/(self.Lr+self.Lf))
 
-        heading_dot = (self.v/self.Lr)*math.sin(slip_angle)
+        #IS THIS A CORRECT WAY TO GO FROM rad/s -> deg/s ?
+        heading_dot = math.degrees((self.v/self.Lr)*math.sin(slip_angle))
         v_dot = lin_accel
 
         #It is a bit wasteful to do this computation here and then again when called in "move"
@@ -268,7 +301,7 @@ class Car():
         self.y_com += self.timestep*num_timesteps*y_dot
 
         self.v += v_dot*self.timestep*num_timesteps
-        self.heading += heading_dot*self.timestep*num_timesteps
+        self.heading = (self.heading + heading_dot*self.timestep*num_timesteps)%360
 
         self.time += self.timestep*num_timesteps
 
@@ -437,7 +470,7 @@ class Car():
             elif self.waypoint_distance is not None and computeDistance([self.x_com,self.y_com],self.waypoints[-1])>self.waypoint_distance:
                 self.is_complete = True
 
-        if self.is_complete and not self.is_ego:
+        if self.is_complete and self.in_demo and not self.is_ego:
             next_lane = random.choice(on.out_lanes) #You are on a junction and choose a direction by choosing the lane to aim for
             destination = random.choice(next_lane.to_junction.out_lanes).to_junction #Trajectory ends at a junction
             self.trajectory,self.waypoints = trajectory_builder.initialiseTrajectory(next_lane.road,next_lane.is_top_up,destination)
@@ -447,6 +480,48 @@ class Car():
         if self.traj_posit < len(self.waypoints):
             self.waypoint_distance = computeDistance([self.x_com,self.y_com],self.waypoints[self.traj_posit])
         else: self.waypoint_distance = computeDistance([self.x_com,self.y_com],self.waypoints[-1])
+
+
+    def resetAfterCrash(self,move_distance=None):
+        cr,_ = self.checkForCrash()
+        if not self.crashed:
+            self.sense()
+            if not self.crashed:
+                # if self.debug:
+                print("Error, no crash detected")
+        else:
+            cr,_ = self.checkForCrash()
+            while self.crashed: #This is in case for some reason a single jump back was not enough to miss the crash
+                recheck,crash_list = self.checkForCrash()
+                crash_veh = crash_list[0] #There should never be a case when this is empty
+                if crash_veh.x_com-self.x_com ==0: #Divide by Zero error
+                    if crash_veh.y_com<self.y_com: angle = 90
+                    else: angle = 270
+                else:
+                    angle = math.degrees(math.atan((crash_veh.y_com-self.y_com)/(crash_veh.x_com-self.x_com)))
+
+                #Compute the angle between ego heading and the location of the agent crashed in to
+                rel_angle = max(angle,self.heading)-min(angle,self.heading)
+                indicator = math.cos(math.radians(rel_angle)) #If positive other is in front of, otherwise is behind
+
+                if move_distance is None:
+                    move_distance = 2.5*self.length
+
+                #Indicator determines whether you should move forwards or backwards to get away from vehicle crashed in to
+                self.x_com -= indicator*move_distance*math.cos(math.radians(self.heading))
+                self.y_com += indicator*move_distance*math.sin(math.radians(self.heading))
+                self.setFourCorners() #Move the rest of the car around the centre of mass
+
+                #Match velocity with other vehicle to avoid immediately crashing again
+                self.v = crash_veh.v
+
+                #Assert crash has been avoided an check if this is the case
+                self.crashed = False
+                crash_veh.crashed = False
+
+                #Update the states of both agents so they become aware they are no longer crashing
+                self.sense()
+                crash_veh.sense()
 
 
     def updatePublicState(self):
@@ -535,18 +610,19 @@ def sideOfLine(pt,line_strt,line_end):
        pt lies on."""
     #Slope here is infinite so side of the line comes down to the x-values
     if line_strt[0] == line_end[0]:
-        if pt[0]>line_strt[0]: return -1
-        else: return 1
+        if pt[0]>line_strt[0]: return -1 #Right of line
+        elif pt[0]<line_strt[0]: return 1 #Left of line
+        else: return 0 #On line
     else:
-        m = (line_strt[1]-line_end[1])/(line_strt[0]-line_end[0])
-    y_test = line_strt[1] + m*(pt[0]-line_strt[0])
-    if pt[1]>y_test: return 1
-    elif pt[1]<y_test: return -1
-    else: return 0
+        m = (line_strt[1]-line_end[1])/(line_strt[0]-line_end[0]) #Slope of line
+        y_test = line_strt[1] + m*(pt[0]-line_strt[0]) #Height point at pt[0] should be if on line
+        if pt[1]>y_test: return 1 #"Below"/Right of line
+        elif pt[1]<y_test: return -1 #"Above"/Left of line
+        else: return 0 #On line
 
 
 def angularToCartesianDisplacement(x_disp,y_disp,direction):
-    """Transl:ates a displacement in a specified direction into displacement along the 
+    """Transl:ates a displacement in a specified direction into displacement along the
        standard basis axes"""
     phi = math.sqrt(x_disp**2 + y_disp**2)
     delta = math.degrees(math.atan(x_disp/y_disp))

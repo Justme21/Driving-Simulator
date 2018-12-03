@@ -13,6 +13,7 @@ class DrivingController():
         self.ego = ego
 
         self.log = []
+        self.speed_limit = speed_limit
 
 
     def getController(self,controller,**kwargs):
@@ -41,9 +42,8 @@ class DrivingController():
         return accel_range,angle_range
 
 
-    def selectAction(self,in_state):
-        state = dict(in_state)
-        log = {}
+    def defineState(self,in_state):
+        full_state = dict(in_state)
 
         if self.ego is not None:
             ego_vel = self.ego.v
@@ -54,33 +54,34 @@ class DrivingController():
 
         if self.other is not None:
             other_v = self.other.v
-            other_com = (self.other.x_com,self.other.y_com)
+            other_com = tuple([self.other.x_com,self.other.y_com])
             other_accel = self.other.accel
         else:
             other_v = 0
-            other_com = (0,0)
+            other_com = tuple([0,0])
             other_accel = 0
-
 
         del_v = other_v - ego_vel
 
-        ego_com = state["position"]
+        ego_com = full_state["position"]
         dist = distance(ego_com,other_com)
         del_d = dist
 
-        log["ego_v"] = ego_vel
-        log["lead_v"] = other_v
-        log["del_v"] = del_v
-        log["del_d"] = del_d
-        log["lead_accel"] = other_accel
-        log["ego_accel"] = ego_accel
+        full_state["ego_v"] = ego_vel
+        full_state["other_v"] = other_v
+        full_state["del_v"] = del_v
+        full_state["del_d"] = del_d
+        full_state["other_accel"] = other_accel
+        full_state["ego_accel"] = ego_accel
 
-        state["del_v"] = del_v
-        state["del_d"] = del_d
+        return full_state
 
-        accel,angle_accel = self.controller.selectAction(state)
 
-        self.log.append([log,accel])
+    def selectAction(self,in_state):
+        full_state = self.defineState(in_state)
+        accel,angle_accel = self.controller.selectAction(full_state)
+
+        self.log.append([full_state,accel])
         return accel,angle_accel
 
 
@@ -100,7 +101,6 @@ class StandardDrivingController():
         self.angle_range = angle_range
 
         self.ego = ego
-        self.other = other
 
         self.accel_up = True
         self.up_coef = .5
@@ -110,11 +110,9 @@ class StandardDrivingController():
         self.angle_jerk = angle_jerk
 
 
-    def setup(self,ego=None,other=None,**kwargs):
+    def setup(self,ego=None,**kwargs):
         if ego is not None:
             self.ego = ego
-        if other is not None:
-            self.other = other
 
 
     def getAccelRange(self,state):
@@ -172,7 +170,6 @@ class StandardDrivingController():
             self.up_coef += .1
             self.down_coef += .5
 
-        #print("State of Controller: Ego Vel: {}\tSwitch: {}\tA_UP: {}\tSwitch Val: {}\nUp_coef: {}\tDown_Coef: {}".format(ego_vel,switch_val,self.accel_up,(ego_vel-(self.speed_limit-self.speed_limit_buffer))/(2*self.speed_limit_buffer),self.up_coef,self.down_coef))
 
         if ego_vel<self.speed_limit-self.speed_limit_buffer: self.down_coef = 0
         elif ego_vel>self.speed_limit+self.speed_limit_buffer: self.up_coef = 0
@@ -191,11 +188,13 @@ class StandardDrivingController():
 
 class FollowController():
     """Basic ACC controller taken from the method depicted in 'Stop and Go Cruise Control'"""
-    # damping = .2, stiff=2
-    def __init__(self,time_radius=1.5,damping=100,stiff=.01,timestep=.1,jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],**kwargs):
-        self.jerk = jerk
+    # damping = 100, stiff=4
+    # damping = 95.8, stiff = 73
+    def __init__(self,time_radius=1.5,damping=95.8,stiff=.5,timestep=.1,jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],**kwargs):
+        self.jerk = jerk #Value of jerk does not affect acceleration chosen somehow
         self.timestep = timestep
         self.t_dist = time_radius
+
 
         self.radius = r
 
@@ -214,7 +213,7 @@ class FollowController():
         self.leader = leader
         self.follower = follower #Follower is the vehicle being controlled
         if r==0:
-            r = self.radius/2
+            r = self.radius
         self.radius = r+(self.leader.length+self.follower.length)/2
 
 
@@ -237,11 +236,12 @@ class FollowController():
         #Ensure acceleration is within the range of permitted accelerations
         accel = min(self.accel_range[1],max(self.accel_range[0],accel))
 
+
         return accel,0
 
 
 class DataGeneratorController():
-    def __init__(self,time_range=[10,40],ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=0,speed_limit_buffer=0,**kwargs):
+    def __init__(self,time_range=[2,10],ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=0,speed_limit_buffer=0,**kwargs):
         self.fast_controller = GoFastController(speed_limit=speed_limit,accel_range=accel_range,ego=ego,**kwargs)
         self.slow_controller = GoSlowController(speed_limit=speed_limit,accel_range=accel_range,ego=ego,**kwargs)
         self.controller = self.fast_controller
@@ -252,8 +252,11 @@ class DataGeneratorController():
         self.accel_range = accel_range
         self.angle_range = angle_range
 
-        self.time_range = time_range
-        self.time = random.randint(self.time_range[0],self.time_range[1])
+        self.timestep = None
+        self.fast_time_range = time_range
+        self.slow_time_range = [.2*time_range[0],.2*time_range[1]]
+        self.time = random.uniform(self.fast_time_range[0],self.fast_time_range[1])
+
 
         self.speed_limit = speed_limit
         self.speed_limit_buffer = speed_limit_buffer
@@ -268,16 +271,19 @@ class DataGeneratorController():
         self.fast_controller.setup(ego=ego,other=other)
         self.slow_controller.setup(ego=ego,other=other)
 
+        self.timestep = ego.timestep
+
 
     def selectAction(self,state):
-        next_vel = state["velocity"]+self.ego.timestep*self.controller.accel
-        if self.time == 0 or (next_vel<0 and self.controller is self.slow_controller) or (next_vel>self.speed_limit and self.controller is self.fast_controller):
-            self.time=random.randint(self.time_range[0],self.time_range[1])
-            if next_vel<0 and self.controller is self.slow_controller:
+        #next_vel = state["velocity"]+self.ego.timestep*self.controller.accel
+        if self.time <= 0:
+            if self.controller is self.slow_controller:
+                self.time=random.uniform(self.fast_time_range[0],self.fast_time_range[1])
                 self.controller = self.fast_controller
-            elif next_vel>self.speed_limit and self.controller is self.fast_controller:
+            elif self.controller is self.fast_controller:
+                self.time = random.uniform(self.slow_time_range[0],self.slow_time_range[1])
                 self.controller = self.slow_controller
-        self.time -= 1
+        self.time -= self.timestep
 
         return self.controller.selectAction(state)
 
@@ -331,6 +337,7 @@ class GoFastController():
 
 
     def selectAction(self,state):
+        #prev_accel = state["acceleration"]
         if state["velocity"]+self.ego.timestep*self.accel>self.speed_limit:
             accel = 0
         else:
