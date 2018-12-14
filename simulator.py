@@ -9,7 +9,7 @@ import vehicle_classes
 
 import math
 
-#random.seed(49307)
+#random.seed(493072)
 MAX_RUNTIME = 1000
 
 class Simulator():
@@ -96,6 +96,15 @@ class Simulator():
         #Re-sense after every car has moved to it's new location
         for car in self.cars:
             car.sense()
+
+
+    def setGraphic(self,graphic):
+        """Changes the value of self.graphics after simulator has been initialised. If simulator was not graphical and graphics are enabled
+         graphical simulator is initialised"""
+        if self.graphic != graphic:
+            self.graphic = graphic
+            if self.graphic:
+                self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars,self.traj)
 
 
     def singleStep(self,move_dict=None,index=None):

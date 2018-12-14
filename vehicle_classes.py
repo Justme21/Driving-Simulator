@@ -88,7 +88,19 @@ class Car():
         self.initialisation_params = []
 
 
+    #property tag means this function can be called as an attribute (veh.state will be the state
+    # returned by composeState
+    @property
+    def state(self):
+        """Define the state of the car so that it can be called at any time during the simulation"""
+        return self.composeState()
+
+
     def distToObj(self):
+        """Returns distance from objective in terms of number of locations
+           self.trajectory is ordered list of junctions and roads you need to
+           pass to reach objective.
+           self.traj_posit is the index of the trajectory you are currently at"""
         return len(self.trajectory)-self.traj_posit
 
 
@@ -219,10 +231,12 @@ class Car():
         return pass_state
 
 
-    def chooseAction(self):
+    def chooseAction(self,accel_range=None,angle_range=None):
         """Merge the public and private states and pass this to the vehicle controller to get linear and angular accelerations"""
         state = self.composeState()
-        self.accel,self.turn_angle = self.controller.selectAction(state)
+        if accel_range is None: accel_range = [None,None]
+        if angle_range is None: angle_range = [None,None]
+        self.accel,self.turn_angle = self.controller.selectAction(state,accel_range,angle_range)
 
 
     def setAction(self,accel=None,turn_angle=None):
