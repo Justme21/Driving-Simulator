@@ -8,7 +8,13 @@ class DrivingController():
     def __init__(self,controller="standard",speed_limit=22.5,speed_limit_buffer=None,ego=None,other=None,**kwargs):
         if speed_limit_buffer is None:
             speed_limit_buffer = .1*speed_limit
-        self.controller = self.getController(controller,ego=ego,other=other,speed_limit=speed_limit,speed_limit_buffer=speed_limit_buffer,**kwargs)
+
+        #Parameters used to regerenerate/reinitialise the controller later
+        self.controller_tag = controller
+        self.initialisation_params = {'ego':ego,'other':other,'speed_limit':speed_limit,'speed_limit_buffer':speed_limit_buffer}
+        self.initialisation_params.update(kwargs)
+
+        self.controller = self.getController(controller,**self.initialisation_params)
         self.other = other
         self.ego = ego
 
@@ -26,8 +32,10 @@ class DrivingController():
     def setup(self,ego=None,other=None,**kwargs):
         if ego is not None:
             self.ego = ego
+            self.initialisation_params['ego'] = ego
         if other is not None:
             self.other = other
+            self.initialisation_params['other'] = other
 
         if isinstance(self.controller,FollowController):
             self.controller.setLeaderAndFollower(leader=other,follower=ego,**kwargs)
@@ -69,6 +77,7 @@ class DrivingController():
 
         full_state["ego_v"] = ego_vel
         full_state["other_v"] = other_v
+        full_state["other_position"] = other_com
         full_state["del_v"] = del_v
         full_state["del_d"] = del_d
         full_state["other_accel"] = other_accel
@@ -81,12 +90,20 @@ class DrivingController():
         full_state = self.defineState(in_state)
         accel,angle_accel = self.controller.selectAction(full_state,accel_range,angle_range)
 
+        #HACKY: This needs to be removed. Inserted to facilitate first year review results
+        if self.ego.state["velocity"] + self.ego.timestep*accel<0: accel = 0
+
         self.log.append([full_state,accel])
         return accel,angle_accel
 
 
+    def reset(self):
+        self.controller = self.getController(self.controller_tag,**self.initialisation_params)
+
+
     def getLog(self):
         return self.log
+
 
     def clearLog(self):
         self.log = []
@@ -193,11 +210,11 @@ class StandardDrivingController():
 class FollowController():
     """Basic ACC controller taken from the method depicted in 'Stop and Go Cruise Control'"""
     # Values used in First Year Review; speed_limit=22.22, damping=95.8, stiff=1.88
-    def __init__(self,time_radius=1.5,damping=40,stiff=4,timestep=.1,jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],**kwargs):
-        self.jerk = jerk #Value of jerk does not affect acceleration chosen somehow
+    def __init__(self,time_radius=1.5,damping=.275,stiff=.32,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=5,**kwargs):
+        self.speed_limit = speed_limit
+        self.jerk = accel_jerk #Value of jerk does not affect acceleration chosen somehow
         self.timestep = timestep
         self.t_dist = time_radius
-
 
         self.radius = r
 
@@ -221,11 +238,18 @@ class FollowController():
 
 
     def selectAction(self,state,lim_accel_range,*args):
-        ego_vel = state["velocity"]
+       # ego_vel = state["velocity"]
+       # try to motivate controller to not drastically exceed speed limit
         del_v = state["del_v"]
+        #del_v>0 => other car is going faster than follower. Motivates follower not to exceed the speed limit too much
+        if del_v>0 and abs(self.speed_limit-self.follower.v)>abs(del_v):
+            #NOTE: This fires in some unnecessary cases, such as when both vehicles are going well under the speed limit
+            #      This can be easily resolved, by the current setup apppears to work so I will leave it for another time
+            #print("LINEAR_CONTROLLER_CLASSES: DEL_V changed from {} to {}".format(del_v,self.speed_limit-self.follower.v))
+            del_v = self.speed_limit-self.follower.v
 
-        ego_com = state["position"]
-        lead_com = (self.leader.x_com,self.leader.y_com)
+       # ego_com = state["position"]
+       # lead_com = (self.leader.x_com,self.leader.y_com)
         del_d = state["del_d"] - self.radius
 
         lead_accel = self.leader.accel
@@ -247,10 +271,13 @@ class FollowController():
 
 
 class DataGeneratorController():
-    def __init__(self,time_range=[2,10],ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=0,speed_limit_buffer=0,**kwargs):
-        self.fast_controller = GoFastController(speed_limit=speed_limit,accel_range=accel_range,ego=ego,**kwargs)
-        self.slow_controller = GoSlowController(speed_limit=speed_limit,accel_range=accel_range,ego=ego,**kwargs)
-        self.controller = self.fast_controller
+    def __init__(self,time_range=[1,10],ego=None,other=None,accel_range=[-5,5],accel_jerk=1,angle_range=[0,0],speed_limit=0,speed_limit_buffer=0,**kwargs):
+        self.fast_controller = GoFastController(speed_limit=speed_limit+speed_limit_buffer,accel_range=accel_range,accel_jerk=accel_jerk,ego=ego,**kwargs)
+        self.slow_controller = GoSlowController(speed_limit=speed_limit+speed_limit_buffer,accel_range=accel_range,accel_jerk=accel_jerk,ego=ego,**kwargs)
+        if ego is not None and ego.state["velocity"] > speed_limit/2:
+            self.controller = self.slow_controller
+        else:
+            self.controller = self.fast_controller
 
         self.ego = ego
         self.other = other
@@ -259,15 +286,27 @@ class DataGeneratorController():
         self.angle_range = angle_range
 
         self.timestep = None
-        self.fast_time_range = time_range
-        self.slow_time_range = [time_range[0],time_range[1]]
-        self.stop_time_range = [0,1.5]
-        self.high_speed_time_range = [0,3]
-        self.time = random.uniform(self.fast_time_range[0],self.fast_time_range[1])
 
+        t_0 = max(abs(accel_range[0]),abs(accel_range[1]))/accel_jerk
+        t11 = -accel_range[0] + math.sqrt(accel_range[0]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
+        t12 = -accel_range[0] - math.sqrt(accel_range[0]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
+        t21 = -accel_range[1] + math.sqrt(accel_range[1]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
+        t22 = -accel_range[1] - math.sqrt(accel_range[1]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
+
+        t_max = max(t_0,t11,t12,t21,t22,time_range[1])
+        #print("LINEAR_CONTROLLER_CLASSES: time_range: {}".format([min(time_range[0],math.ceil(.2*t_max)),t_max]))
+
+        self.fast_time_range = [min(time_range[0],math.ceil(.2*t_max)),.5*t_max]
+        self.slow_time_range = [min(time_range[0],math.ceil(.2*t_max)),.5*t_max]
+        self.stop_time_range = [0,1.5]
+        self.high_speed_time_range = [0,1]
+        self.time = random.uniform(self.fast_time_range[0],self.fast_time_range[1])
 
         self.speed_limit = speed_limit
         self.speed_limit_buffer = speed_limit_buffer
+
+        if ego is not None:
+            self.timestep = ego.timestep
 
 
     def setup(self,ego=None,other=None,**kwargs):
@@ -279,17 +318,22 @@ class DataGeneratorController():
         self.fast_controller.setup(ego=ego,other=other)
         self.slow_controller.setup(ego=ego,other=other)
 
+        if self.ego is not None and ego.state["velocity"]>self.speed_limit/2:
+            self.controller = self.slow_controller
+        else:
+            self.controller = self.fast_controller
+
         self.timestep = ego.timestep
 
 
     def selectAction(self,state,lim_accel_range,lim_angle_range):
         #next_vel = state["velocity"]+self.ego.timestep*self.controller.accel
         if state["velocity"]<.5:
-            if self.time>self.stop_time_range[1]:
+            if self.controller is self.slow_controller and self.time>self.stop_time_range[1]:
                 self.time = random.uniform(self.stop_time_range[0],self.stop_time_range[1])
 
-        elif state["velocity"]>=self.speed_limit+self.speed_limit_buffer:
-            if self.time>self.high_speed_time_range[1]:
+        elif state["velocity"]>=self.speed_limit:
+            if self.controller is self.fast_controller and self.time>self.high_speed_time_range[1]:
                 self.time = random.uniform(self.high_speed_time_range[0],self.high_speed_time_range[1])
 
         if self.time <= 0:
@@ -344,9 +388,11 @@ class OvertakeController():
 
 
 class GoFastController():
-    def __init__(self,speed_limit=0,accel_range=[-5,5],ego=None,**kwargs):
+    def __init__(self,speed_limit=0,accel_range=[-5,5],accel_jerk=10,ego=None,**kwargs):
         self.speed_limit = speed_limit
-        self.accel = accel_range[1]
+        self.accel = None
+        self.accel_limit = accel_range[1]
+        self.accel_jerk = accel_jerk
 
         self.ego = ego
 
@@ -357,7 +403,10 @@ class GoFastController():
 
 
     def selectAction(self,state,lim_accel_range,*args):
-        #prev_accel = state["acceleration"]
+        prev_accel = state["acceleration"]
+        self.accel = prev_accel + self.accel_jerk*self.ego.timestep
+        if self.accel > self.accel_limit: self.accel = self.accel_limit
+
         if state["velocity"]+self.ego.timestep*self.accel>self.speed_limit:
             accel = 0
         else:
@@ -368,9 +417,23 @@ class GoFastController():
         return accel,0
 
 
+#    def selectAction(self,state,lim_accel_range,*args):
+#        #prev_accel = state["acceleration"]
+#        if state["velocity"]+self.ego.timestep*self.accel>self.speed_limit:
+#            accel = 0
+#        else:
+#            if lim_accel_range[1] is not None and lim_accel_range[1]<self.accel:
+#                accel = lim_accel_range[1]
+#            else:
+#                accel = self.accel
+#        return accel,0
+#
+
 class GoSlowController():
-    def __init__(self,accel_range=[-5,5],ego=None,**kwargs):
-        self.accel = accel_range[0]
+    def __init__(self,accel_range=[-5,5],accel_jerk=10,ego=None,**kwargs):
+        self.accel = None
+        self.accel_limit = accel_range[0]
+        self.accel_jerk = accel_jerk
 
         self.ego = ego
 
@@ -381,6 +444,10 @@ class GoSlowController():
 
 
     def selectAction(self,state,lim_accel_range,*args):
+        prev_accel = state["acceleration"]
+        self.accel = prev_accel - self.accel_jerk*self.ego.timestep
+        if self.accel < self.accel_limit: self.accel = self.accel_limit
+
         if state["velocity"]+self.ego.timestep*self.accel<0:
             accel = 0
         else:
@@ -389,6 +456,17 @@ class GoSlowController():
             else:
                 accel = self.accel
         return accel,0
+
+
+#    def selectAction(self,state,lim_accel_range,*args):
+#        if state["velocity"]+self.ego.timestep*self.accel<0:
+#            accel = 0
+#        else:
+#            if lim_accel_range[0] is not None and lim_accel_range[0]>self.accel:
+#                accel = lim_accel_range[0]
+#            else:
+#                accel = self.accel
+#        return accel,0
 
 
 class RandomController():

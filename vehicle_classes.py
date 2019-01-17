@@ -221,6 +221,7 @@ class Car():
         params = self.initialisation_params
         self.time = 0
         self.initSetup(*params)
+        self.controller.reset()
 
 
     def composeState(self):
@@ -231,12 +232,16 @@ class Car():
         return pass_state
 
 
-    def chooseAction(self,accel_range=None,angle_range=None):
+    def chooseAction(self,accel_range=None,angle_range=None,particles=None):
         """Merge the public and private states and pass this to the vehicle controller to get linear and angular accelerations"""
         state = self.composeState()
         if accel_range is None: accel_range = [None,None]
         if angle_range is None: angle_range = [None,None]
-        self.accel,self.turn_angle = self.controller.selectAction(state,accel_range,angle_range)
+
+        if particles is None:
+            self.accel,self.turn_angle = self.controller.selectAction(state,accel_range,angle_range)
+        else:
+            self.accel,self.turn_angle = self.controller.selectAction(state,accel_range,angle_range,particles)
 
 
     def setAction(self,accel=None,turn_angle=None):
@@ -346,11 +351,12 @@ class Car():
                 #If front of car is within lane_width of front/back of lane
                 #Then it is worth checking if we have transitioned onto the
                 #next/previous junction for the lane.
+
                 if obj.to_junction not in self.on and computeDistance((self.x_com,self.y_com),\
                         front_pt) < obj.width+self.length/2:
                     candidates.append(obj.to_junction)
                 if obj.from_junction not in self.on and computeDistance((self.x_com,self.y_com),\
-                        back_pt) < obj.width+self.length/2 and obj.from_junction not in self.on:
+                        back_pt) < obj.width+self.length/2:
                     candidates.append(obj.from_junction)
 
                 #It is always worth checking to make sure we have not drifted
@@ -375,7 +381,6 @@ class Car():
                                self.heading,(lane.direction+180)%360,lane.direction))
                     if math.fabs(lane.direction-self.heading)<45:
                         candidates.append(lane)
-
         return candidates
 
 
@@ -512,11 +517,16 @@ class Car():
                     if crash_veh.y_com<self.y_com: angle = 90
                     else: angle = 270
                 else:
-                    angle = math.degrees(math.atan((crash_veh.y_com-self.y_com)/(crash_veh.x_com-self.x_com)))
+                    #Negative symbol for y values flips slope to account for inversion of y-coordinate (going "up" decreases y)
+                    angle = math.degrees(math.atan(-(crash_veh.y_com-self.y_com)/(crash_veh.x_com-self.x_com)))%360
+
+                print("ANGLE IS: {}".format(angle))
 
                 #Compute the angle between ego heading and the location of the agent crashed in to
                 rel_angle = max(angle,self.heading)-min(angle,self.heading)
                 indicator = math.cos(math.radians(rel_angle)) #If positive other is in front of, otherwise is behind
+
+                print("INDICATOR IS: {}".format(indicator))
 
                 if move_distance is None:
                     move_distance = 2.5*self.length

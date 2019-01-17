@@ -36,8 +36,6 @@ class Simulator():
         self.debug = debug #Debug prints debug text littered throughout the code
         self.dt = dt #size of a timestep in the simulator
 
-        self.min_dist = []
-
 
     def loadCars(self,car_list):
         """Loads a list of initialised cars into the simulator.
@@ -107,12 +105,13 @@ class Simulator():
                 self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars,self.traj)
 
 
-    def singleStep(self,move_dict=None,index=None):
+    def singleStep(self,car_list = None,move_dict=None,index=None):
         """Runs a single timestep of the simulator. Each car chooses an action and moves according to the action.
            After all cars have moved the graphical element is updated and all cars sense the changes in the environment
            move_dict: dictionary with Car objects as keys that maps to a sequential list of (lin_accel,ang_accel) pairs
            index: integer indicating the entry from the list of actions that should be taken for each car"""
-        for car in self.cars:
+        if car_list is None: car_list = self.cars
+        for car in car_list:
             if move_dict is None or car not in move_dict:
                 car.chooseAction()
             else:
@@ -121,8 +120,6 @@ class Simulator():
                 else:
                     car.setAction(0,0)
             car.move()
-        #dist = math.sqrt((self.cars[0].x_com-self.cars[1].x_com)**2 + (self.cars[0].y_com-self.cars[1].y_com)**2)
-        #self.min_dist.append(dist)
         if self.graphic: self.g_sim.update()
         self.runSensing()
 
@@ -326,20 +323,21 @@ if __name__ == "__main__":
     #3-road intersection
     num_junctions = 5
     num_roads = 4
-    num_cars = 2
+    num_cars = 3
 
-    road_angles = [90,90,90,90]
-    road_lengths = [10,10,50,15]
+    road_angles = [0,0,90,90]
+    road_lengths = [40,40,40,40]
 
-    junc_pairs = [(0,1),(1,2),(2,3),(3,4)]
-    starts = [[(1,2),1],[(0,1),1]]
+    junc_pairs = [(0,1),(1,2),(3,1),(1,4)]
+    starts = [[(0,1),1],[(1,4),0],[(0,1),1]]
     #dests = [[(0,1)]]
-    dests = [[(2,3),1],[(3,4),1]]
+    #dests = [[(2,3),1],[(3,4),1]]
+    dests = None
 
     car_speeds = [0,0]
 
     run_graphics = True
-    draw_traj = True
+    draw_traj = False
     debug = False
 
     num_episodes = 10000
