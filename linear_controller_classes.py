@@ -5,21 +5,26 @@ import random
 
 class DrivingController():
 
-    def __init__(self,controller="standard",speed_limit=22.5,speed_limit_buffer=None,ego=None,other=None,**kwargs):
+    def __init__(self,controller="standard",speed_limit=22.5,speed_limit_buffer=None,ego=None,other=None,timestep=.1,reaction_time=0,**kwargs):
         if speed_limit_buffer is None:
             speed_limit_buffer = .1*speed_limit
 
         #Parameters used to regerenerate/reinitialise the controller later
         self.controller_tag = controller
-        self.initialisation_params = {'ego':ego,'other':other,'speed_limit':speed_limit,'speed_limit_buffer':speed_limit_buffer}
+        self.initialisation_params = {'ego':ego,'other':other,'speed_limit':speed_limit,'speed_limit_buffer':speed_limit_buffer,'timestep':timestep}
         self.initialisation_params.update(kwargs)
 
         self.controller = self.getController(controller,**self.initialisation_params)
-        self.other = other
-        self.ego = ego
+        self.ego = None
+        self.other = None
+        self.setup(ego=ego,other=other)
 
         self.log = []
-        self.speed_limit = speed_limit
+        self.speed_limit = speed_limit+speed_limit_buffer
+
+        self.state = []
+
+        self.action_list = [0 for _ in range(int(reaction_time/timestep))]
 
 
     def getController(self,controller,**kwargs):
@@ -37,10 +42,11 @@ class DrivingController():
             self.other = other
             self.initialisation_params['other'] = other
 
-        if isinstance(self.controller,FollowController):
-            self.controller.setLeaderAndFollower(leader=other,follower=ego,**kwargs)
-        else:
-            self.controller.setup(ego=ego,other=other)
+        if ego is not None:
+            if isinstance(self.controller,FollowController):
+                self.controller.setLeaderAndFollower(leader=other,follower=ego,**kwargs)
+            else:
+                self.controller.setup(ego=ego,other=other)
 
 
     def getAccelRange(self,state):
@@ -83,6 +89,9 @@ class DrivingController():
         full_state["other_accel"] = other_accel
         full_state["ego_accel"] = ego_accel
 
+        #NOTe: This is here purely for debuggin purposes
+        self.state = full_state
+
         return full_state
 
 
@@ -90,15 +99,35 @@ class DrivingController():
         full_state = self.defineState(in_state)
         accel,angle_accel = self.controller.selectAction(full_state,accel_range,angle_range)
 
+        #print("Full State: {}\nAccel:{}\n\n".format(full_state,accel))
+
         #HACKY: This needs to be removed. Inserted to facilitate first year review results
-        if self.ego.state["velocity"] + self.ego.timestep*accel<0: accel = 0
+        next_vel = self.ego.state["velocity"] + self.ego.timestep*accel
+        if accel_range == [None,None]:
+            accel_range = list(accel_range)
+            accel_range = self.controller.accel_range
+        if next_vel<0:
+            accel = max(accel_range[0],-self.ego.state["velocity"]/self.ego.timestep)
+        elif next_vel>self.speed_limit:
+            accel = min(accel_range[1],max(accel_range[0],(self.speed_limit-self.ego.state["velocity"])/self.ego.timestep))
+
+        #if accel==0.0 and self.controller_tag == "follow":
+        #    print("Found a 0 in general controller")
+        #    print("Next vel is :{}\tAccel_Range is: {}\tSpeed_limit is: {}".format(next_vel,accel_range,self.speed_limit))
+        #    exit(-1)
 
         self.log.append([full_state,accel])
+
+        #To incorporate reaction time while still preserving what the controller "wanted" to do
+        self.action_list.append(accel)
+        accel = self.action_list.pop(0)
+
         return accel,angle_accel
 
 
     def reset(self):
         self.controller = self.getController(self.controller_tag,**self.initialisation_params)
+        self.action_list = [0 for _ in self.action_list]
 
 
     def getLog(self):
@@ -210,17 +239,19 @@ class StandardDrivingController():
 class FollowController():
     """Basic ACC controller taken from the method depicted in 'Stop and Go Cruise Control'"""
     # Values used in First Year Review; speed_limit=22.22, damping=95.8, stiff=1.88
-    def __init__(self,time_radius=1.5,damping=.275,stiff=.32,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=5,**kwargs):
-        self.speed_limit = speed_limit
+    # Values used for experiments without basis in literature: speed_limit=22.22, damping=.275, stiff=.32
+    def __init__(self,time_radius=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=5,**kwargs):
         self.jerk = accel_jerk #Value of jerk does not affect acceleration chosen somehow
+        self.speed_limit = speed_limit
         self.timestep = timestep
         self.t_dist = time_radius
 
         self.radius = r
 
         #These are default values that will be overwritten when setLeaderAndFollower is called
-        self.leader = ego
-        self.follower = other
+        self.leader = None
+        self.follower = None
+        if other is not None: self.setLeaderAndFollower(leader=other,follower=ego,r=r)
 
         self.k_v = damping
         self.k_d = stiff
@@ -238,21 +269,19 @@ class FollowController():
 
 
     def selectAction(self,state,lim_accel_range,*args):
-       # ego_vel = state["velocity"]
-       # try to motivate controller to not drastically exceed speed limit
-        del_v = state["del_v"]
-        #del_v>0 => other car is going faster than follower. Motivates follower not to exceed the speed limit too much
-        if del_v>0 and abs(self.speed_limit-self.follower.v)>abs(del_v):
+        if self.follower.v>self.speed_limit:
             #NOTE: This fires in some unnecessary cases, such as when both vehicles are going well under the speed limit
             #      This can be easily resolved, by the current setup apppears to work so I will leave it for another time
-            #print("LINEAR_CONTROLLER_CLASSES: DEL_V changed from {} to {}".format(del_v,self.speed_limit-self.follower.v))
-            del_v = self.speed_limit-self.follower.v
+            #print("LINEAR_CONTROLLER_CLASSES: Speed Limit is:{}\t DEL_V changed from {} to {}".format(self.speed_limit,state["del_v"],self.speed_limit-self.follower.v))
+            del_v = self.speed_limit-state["ego_v"]
+            lead_accel = 0
+        else:
+            del_v = state["del_v"]
+            lead_accel = self.leader.accel
 
-       # ego_com = state["position"]
-       # lead_com = (self.leader.x_com,self.leader.y_com)
-        del_d = state["del_d"] - self.radius
+        d_des = self.radius + state["ego_v"]*self.t_dist
+        del_d = state["del_d"] - d_des
 
-        lead_accel = self.leader.accel
         a_z = 0 #Disturbance acceleration caused by environment
 
         coef = (1/(1+self.k_v*self.t_dist))
@@ -260,13 +289,13 @@ class FollowController():
         t2 = self.t_dist*(coef)*self.jerk
 
         accel = t1-t2
+
         #Ensure acceleration is within the range of permitted accelerations
         accel_range = self.accel_range
         if lim_accel_range[0] is not None and lim_accel_range[0]>accel_range[0]: accel_range[0] = lim_accel_range[0]
         if lim_accel_range[1] is not None and lim_accel_range[1]<accel_range[1]: accel_range[1] = lim_accel_range[1]
 
         accel = min(accel_range[1],max(accel_range[0],accel))
-
         return accel,0
 
 
@@ -489,6 +518,9 @@ class RandomController():
         angle = np.random.uniform(angle_range[0],angle_range[1])
         return accel,angle
 
+#def distance(pt1,pt2):
+#    """Revised distance function that captures when an NE has passed E (del_d negative)"""
+#    return (pt1[1]-pt2[1])
 
 def distance(pt1,pt2):
     return math.sqrt((pt2[0]-pt1[0])**2 + (pt2[1]-pt1[1])**2)

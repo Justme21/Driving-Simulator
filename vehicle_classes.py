@@ -520,13 +520,9 @@ class Car():
                     #Negative symbol for y values flips slope to account for inversion of y-coordinate (going "up" decreases y)
                     angle = math.degrees(math.atan(-(crash_veh.y_com-self.y_com)/(crash_veh.x_com-self.x_com)))%360
 
-                print("ANGLE IS: {}".format(angle))
-
                 #Compute the angle between ego heading and the location of the agent crashed in to
                 rel_angle = max(angle,self.heading)-min(angle,self.heading)
                 indicator = math.cos(math.radians(rel_angle)) #If positive other is in front of, otherwise is behind
-
-                print("INDICATOR IS: {}".format(indicator))
 
                 if move_distance is None:
                     move_distance = 2.5*self.length
