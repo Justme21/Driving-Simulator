@@ -285,7 +285,7 @@ class Car():
         self.controllers.update(controller_dict)
 
 
-    def simulateDynamics(self,lin_accel,turn_angle):
+    def simulateDynamics(self,lin_accel,turn_angle,init_vel=None,init_heading=None):
         """Simulate the consequences of applying linear acceleration v_dot and angular acceleration
            head_dot on the current state of the car using the specified vehicle dynamics"""
         slip_angle = math.atan(math.tan(math.radians(turn_angle))*self.Lr/(self.Lr+self.Lf))
@@ -297,8 +297,15 @@ class Car():
         #It is a bit wasteful to do this computation here and then again when called in "move"
         # but by not having simulate Dynamics actually affect the agent it means other programs
         # can use it
-        v = self.v + v_dot*self.timestep
-        heading = self.heading + heading_dot*self.timestep
+
+        if init_vel is not None: vel = init_vel
+        else: vel = self.v
+
+        if init_heading is not None: head = init_heading
+        else: head = self.heading
+
+        v = vel + v_dot*self.timestep
+        heading = head + heading_dot*self.timestep
 
 
         x_dot = v*math.cos(math.radians(heading)+slip_angle)
@@ -548,6 +555,7 @@ class Car():
         state = {}
         state["position"] = (self.x_com,self.y_com)
         state["velocity"] = self.v
+        state["heading"] = self.heading
         state["acceleration"] = self.accel
         state["turn_angle"] = self.turn_angle
         state["four_corners"] = self.four_corners
