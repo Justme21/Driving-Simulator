@@ -39,10 +39,8 @@ class DrivingController():
             self.initialisation_params['other'] = other
 
         if ego is not None:
-            if isinstance(self.controller,lcp.FollowController):
-                self.controller.setLeaderAndFollower(leader=other,follower=ego,**kwargs)
-            else:
-                self.controller.setup(ego=ego,other=other)
+            self.controller.setup(ego=ego,other=other,**kwargs)
+            self.initialisation_params.update(kwargs)
 
 
     def getAccelRange(self,state):
@@ -209,6 +207,9 @@ class ProactiveDrivingController(DelayedDrivingController):
         #print("ActionList for ProactiveController is: {}".format(self.action_list))
         action_list = None #temporary copy of list
         #print("Proactive")
+        if self.other_trajectory is not None:
+            print("Index: {}\tState: {}".format(self.traj_index,state))
+
         for i in range(0,self.anticipation_time+1):
             action = super().chooseAction(state,accel_range,angle_range)
             #print("In ProactiveController in Loop ActionList is: {}".format(self.action_list))
@@ -234,11 +235,15 @@ class ProactiveDrivingController(DelayedDrivingController):
                 state["position"] = (state["position"][0]+x_dot*self.timestep,state["position"][1]+y_dot*self.timestep)
                 state["velocity"] = state["velocity"]+v_dot*self.timestep
                 state["heading"] = state["heading"]+head_dot*self.timestep
+                state["acceleration"] = action[0]
                 state = super().inferFeatures(state)
+#                print("I: {}\tTraj: {}\nState: {}".format(i,traj_point,state))
 
-        #print("\n")
         tot_action = [x/determinant for x in tot_action]
         self.action_list = action_list
+        if self.other_trajectory is not None:
+            print("Action is: {}\n".format(tot_action))
+            self.traj_index += 1
         #print("Tot Action at end of ProactiveController is: {}".format(tot_action))
         #print("ActionList at end of ProactiveController is: {} with {} the chosen action".format(self.action_list,tot_action))
         return (tot_action[0],tot_action[1])
@@ -251,10 +256,6 @@ class ProactiveDrivingController(DelayedDrivingController):
         (accel,angle_accel) = action
 
         self.log.append([state,accel])
-        if self.other_trajectory is not None:
-            self.traj_index += 1
-
-        #print("Chosen Action is: {}\n".format((accel,angle_accel)))
         return accel,angle_accel
 
 

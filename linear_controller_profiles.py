@@ -1,6 +1,11 @@
 import math
+import matplotlib.pyplot as plt
 import numpy as np
 import random
+import sys
+
+sys.path.insert(0,"../responsibility_experiments")
+import rnr_exp1 as rnr
 
 class StandardDrivingController():
     def __init__(self,ego=None,other=None,accel_range=[-5,5],accel_jerk=1,angle_range=[0,0],angle_jerk=5,speed_limit=5,speed_limit_buffer=5,**kwargs):
@@ -104,13 +109,15 @@ class FollowController():
     """Basic ACC controller taken from the method depicted in 'Stop and Go Cruise Control'"""
     # Values used in First Year Review; speed_limit=22.22, damping=95.8, stiff=1.88
     # Values used for experiments without basis in literature: speed_limit=22.22, damping=.275, stiff=.32
-    def __init__(self,time_headway=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=5,**kwargs):
+    #def __init__(self,time_headway=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=5,**kwargs):
+    def __init__(self,time_headway=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=5,safe_dist_bounds=None,**kwargs):
         self.jerk = accel_jerk #Value of jerk does not affect acceleration chosen somehow
         self.speed_limit = speed_limit
         self.timestep = timestep
         self.t_dist = time_headway
 
         self.radius = r
+        self.safe_dist_bounds = safe_dist_bounds
 
         #These are default values that will be overwritten when setLeaderAndFollower is called
         self.leader = None
@@ -124,12 +131,55 @@ class FollowController():
         self.angle_range = angle_range
 
 
+    def simulateController(self,sim):
+        dists = []
+        for _ in range(20):
+            sim.reinitialise()
+            coef = random.uniform(0.1,1)
+            traj_type = random.choice(("safe","bangBang"))
+            traj_with_index = rnr.makeTrajectory(self.leader,traj_type,self.accel_range,self.speed_limit,coef)
+            sim.reinitialise()
+            move_dict = {self.leader:[(x[1],0) for x in traj_with_index[0]]}
+            i = 0
+            while rnr.canGo([self.leader,self.follower]):
+                sim.singleStep(move_dict=move_dict,index=i)
+                del_d = abs(rnr.computeDistance((self.leader.x_com,self.leader.y_com),(self.follower.x_com,self.follower.y_com)))
+                #dists.append(math.sqrt((del_d-self.radius)**2 + (del_d-3*self.radius)**2))
+                dists.append(del_d-self.radius)
+                i += 1
+
+            while rnr.canGo([self.follower]) and self.follower.v>.5:
+                sim.singleStep([self.follower])
+                del_d = abs(rnr.computeDistance((self.leader.x_com,self.leader.y_com),(self.follower.x_com,self.follower.y_com)))
+                #dists.append((del_d-self.radius)**2 + (del_d-3*self.radius)**2)
+                dists.append(del_d-self.radius)
+
+        return dists
+
+
+    def objective(self,params,sim=None):
+        self.k_v = params[0]
+        self.k_d = params[1]
+        dists = self.simulateController(sim)
+        plt.plot(dists)
+        plt.show()
+        exit(-1)
+
+
+    def setup(self,ego=None,other=None,r=0,**kwargs):
+        self.setLeaderAndFollower(leader=other,follower=ego,r=r,**kwargs)
+        #sim = rnr.initialiseSimulator([self.leader,self.follower],self.speed_limit,True,[self.speed_limit,self.speed_limit],vehicle_spacing=2*self.follower.length,data_generation=True)
+        #self.objective((self.k_v,self.k_d),sim)
+
+
     def setLeaderAndFollower(self,leader,follower,r=0,**kwargs):
         self.leader = leader
         self.follower = follower #Follower is the vehicle being controlled
         if r==0:
             r = self.radius
         self.radius = r+(self.leader.length+self.follower.length)/2
+        if self.safe_dist_bounds is None:
+            self.safe_dist_bounds = (self.radius,3*self.radius)
 
 
     def selectAction(self,state,lim_accel_range,*args):
@@ -189,10 +239,10 @@ class DataGeneratorController():
         t_max = max(t_0,t11,t12,t21,t22,time_range[1])
         #print("LINEAR_CONTROLLER_CLASSES: time_range: {}".format([min(time_range[0],math.ceil(.2*t_max)),t_max]))
 
-        self.fast_time_range = [min(time_range[0],math.ceil(.2*t_max)),.5*t_max]
-        self.slow_time_range = [min(time_range[0],math.ceil(.2*t_max)),.5*t_max]
-        self.stop_time_range = [0,1.5]
-        self.high_speed_time_range = [0,1]
+        self.fast_time_range = [min(time_range[0],math.ceil(.2*t_max)),min(.75*t_max,time_range[1])]
+        self.slow_time_range = [min(time_range[0],math.ceil(.2*t_max)),min(.75*t_max,time_range[1])]
+        self.stop_time_range = [0,.5]
+        self.high_speed_time_range = [0,2]
         self.time = random.uniform(self.fast_time_range[0],self.fast_time_range[1])
 
         self.speed_limit = speed_limit

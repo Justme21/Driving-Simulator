@@ -519,13 +519,24 @@ class Car():
             cr,_ = self.checkForCrash()
             while self.crashed: #This is in case for some reason a single jump back was not enough to miss the crash
                 recheck,crash_list = self.checkForCrash()
-                crash_veh = crash_list[0] #There should never be a case when this is empty
-                if crash_veh.x_com-self.x_com ==0: #Divide by Zero error
-                    if crash_veh.y_com<self.y_com: angle = 90
-                    else: angle = 270
-                else:
-                    #Negative symbol for y values flips slope to account for inversion of y-coordinate (going "up" decreases y)
-                    angle = math.degrees(math.atan(-(crash_veh.y_com-self.y_com)/(crash_veh.x_com-self.x_com)))%360
+                try:
+                    crash_veh = crash_list[0] #There should never be a case when this is empty
+                    if crash_veh.x_com-self.x_com ==0: #Divide by Zero error
+                        if crash_veh.y_com<self.y_com: angle = 90
+                        else: angle = 270
+                    else:
+                        #Negative symbol for y values flips slope to account for inversion of y-coordinate (going "up" decreases y)
+                        angle = math.degrees(math.atan(-(crash_veh.y_com-self.y_com)/(crash_veh.x_com-self.x_com)))%360
+
+                    crash_vel = crash_veh.v
+                except IndexError: #IndexError throws if crash_list is empty
+                    print("Error: Crash detected by {}, but crash_list is empty".format(self.label))
+                    # Using generic values to either evade the crash by chance, or else result in a bigger crash which hopefully
+                    # avoids the error
+                    crash_veh = None
+                    angle = self.heading
+                    move_distance = self.length/2
+                    crash_vel = self.v
 
                 #Compute the angle between ego heading and the location of the agent crashed in to
                 rel_angle = max(angle,self.heading)-min(angle,self.heading)
@@ -540,15 +551,17 @@ class Car():
                 self.setFourCorners() #Move the rest of the car around the centre of mass
 
                 #Match velocity with other vehicle to avoid immediately crashing again
-                self.v = crash_veh.v
+                self.v = crash_vel
 
                 #Assert crash has been avoided an check if this is the case
                 self.crashed = False
-                crash_veh.crashed = False
+                if crash_veh is not None:
+                    crash_veh.crashed = False
 
                 #Update the states of both agents so they become aware they are no longer crashing
                 self.sense()
-                crash_veh.sense()
+                if crash_veh is not None:
+                    crash_veh.sense()
 
 
     def updatePublicState(self):
