@@ -8,7 +8,7 @@ sys.path.insert(0,"../responsibility_experiments")
 import rnr_exp1 as rnr
 
 class StandardDrivingController():
-    def __init__(self,ego=None,other=None,accel_range=[-5,5],accel_jerk=1,angle_range=[0,0],angle_jerk=5,speed_limit=5,speed_limit_buffer=5,**kwargs):
+    def __init__(self,ego=None,accel_range=[-5,5],accel_jerk=1,angle_range=[0,0],angle_jerk=5,speed_limit=5,speed_limit_buffer=5,**kwargs):
         self.speed_limit = speed_limit
         self.speed_limit_buffer = speed_limit_buffer
 
@@ -103,6 +103,68 @@ class StandardDrivingController():
         angle = np.random.uniform(angle_range[0],angle_range[1])
 
         return accel,angle
+
+
+class TrajectoryController():
+    def __init__(self,ego=None,traj_func=None,accel_range=None,angle_range=None,auto_start_traj=True,start_coef=1,**kwargs):
+        self.ego = ego
+        self.accel_range = accel_range
+
+        self.traj_generator = traj_func
+        kwargs.update({"ego":ego,"accel_range":accel_range,"angle_range":angle_range})
+        self.generator_params = kwargs
+
+        self.auto_start_trajectory = auto_start_traj
+        self.start_coef = start_coef
+        self.backup_controller = DataGeneratorController(**kwargs)
+
+        if self.ego is None:
+            self.trajectory = []
+        else:
+            self.trajectory = None
+           # self.trajectory = self.traj_generator(**self.generator_params)
+        self.index = -1
+
+
+    def setup(self,ego=None,**kwargs):
+        if ego is not None:
+            self.ego = ego
+            self.generator_params.update({"ego":ego})
+            self.backup_controller.setup(ego=ego,**kwargs)
+
+        #If ego has not been loaded onto a simulator when the controller is initialised then there will be no destination
+        # or waypoints set, so not trajectory can be constructed
+        if self.ego.destination is not None:
+            self.trajectory = self.traj_generator(**self.generator_params)
+            self.index = 0
+
+
+    def selectAction(self,state,lim_accel_range,lim_angle_range):
+        if self.trajectory is None:
+            #It is a bit hacky to have this here, but generating trajectories whenever
+            # vehicle was reset created lots of problems (i.e. short track => infinite loop
+            # trying to create trajectory.
+            # SelectAction only fires if there is an expectation that a trajectory can be 
+            # constructed
+            self.trajectory = self.traj_generator(**self.generator_params)
+            if self.auto_start_trajectory: self.index = 0
+            else:
+                self.backup_controller.setup()
+                self.index = -1
+
+        if self.index == -1:
+            if random.random()<self.start_coef: self.index = 0
+            else: accel,angle_accel = self.backup_controller.selectAction(state,lim_accel_range,lim_angle_range)
+
+        if self.index != -1:
+            if self.index<len(self.trajectory):
+                accel,angle_accel = self.trajectory[self.index][1],0
+            else:
+                if self.index == len(self.trajectory):
+                    self.backup_controller.setup()
+                accel,angle_accel = self.backup_controller.selectAction(state,lim_accel_range,lim_angle_range)
+            self.index += 1
+        return accel,angle_accel
 
 
 class FollowController():
@@ -217,10 +279,8 @@ class DataGeneratorController():
     def __init__(self,time_range=[1,10],ego=None,other=None,accel_range=[-5,5],accel_jerk=1,angle_range=[0,0],speed_limit=0,speed_limit_buffer=0,**kwargs):
         self.fast_controller = GoFastController(speed_limit=speed_limit+speed_limit_buffer,accel_range=accel_range,accel_jerk=accel_jerk,ego=ego,**kwargs)
         self.slow_controller = GoSlowController(speed_limit=speed_limit+speed_limit_buffer,accel_range=accel_range,accel_jerk=accel_jerk,ego=ego,**kwargs)
-        if ego is not None and ego.state["velocity"] > speed_limit/2:
-            self.controller = self.slow_controller
-        else:
-            self.controller = self.fast_controller
+
+        self.controller = None
 
         self.ego = ego
         self.other = other
@@ -230,20 +290,24 @@ class DataGeneratorController():
 
         self.timestep = None
 
-        t_0 = max(abs(accel_range[0]),abs(accel_range[1]))/accel_jerk
-        t11 = -accel_range[0] + math.sqrt(accel_range[0]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
-        t12 = -accel_range[0] - math.sqrt(accel_range[0]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
-        t21 = -accel_range[1] + math.sqrt(accel_range[1]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
-        t22 = -accel_range[1] - math.sqrt(accel_range[1]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
+        #t_0 = max(abs(accel_range[0]),abs(accel_range[1]))/accel_jerk
+        #t11 = -accel_range[0] + math.sqrt(accel_range[0]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
+        #t12 = -accel_range[0] - math.sqrt(accel_range[0]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
+        #t21 = -accel_range[1] + math.sqrt(accel_range[1]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
+        #t22 = -accel_range[1] - math.sqrt(accel_range[1]**2 + 4*accel_jerk*speed_limit)/(2*accel_jerk)
 
-        t_max = max(t_0,t11,t12,t21,t22,time_range[1])
+        #t_max = max(t_0,t11,t12,t21,t22,time_range[1])
         #print("LINEAR_CONTROLLER_CLASSES: time_range: {}".format([min(time_range[0],math.ceil(.2*t_max)),t_max]))
 
-        self.fast_time_range = [min(time_range[0],math.ceil(.2*t_max)),min(.75*t_max,time_range[1])]
-        self.slow_time_range = [min(time_range[0],math.ceil(.2*t_max)),min(.75*t_max,time_range[1])]
-        self.stop_time_range = [0,.5]
+        #self.fast_time_range = [min(time_range[0],math.ceil(t_max)),min(t_max,time_range[1])]
+        #self.slow_time_range = [min(time_range[0],math.ceil(t_max)),min(t_max,time_range[1])]
+        ta = (accel_range[1]-accel_range[0])/accel_jerk
+        self.fast_time_range = [time_range[0],max(time_range[1],ta)]
+        self.slow_time_range = [time_range[0],max(time_range[1],ta)]
+        self.stop_time_range = [0,2]
         self.high_speed_time_range = [0,2]
-        self.time = random.uniform(self.fast_time_range[0],self.fast_time_range[1])
+        #self.time = random.uniform(self.fast_time_range[0],self.fast_time_range[1])
+        self.time = None
 
         self.speed_limit = speed_limit
         self.speed_limit_buffer = speed_limit_buffer
@@ -255,21 +319,23 @@ class DataGeneratorController():
     def setup(self,ego=None,other=None,**kwargs):
         if ego is not None:
             self.ego = ego
+            self.timestep = self.ego.timestep
         if other is not None:
             self.other = other
 
         self.fast_controller.setup(ego=ego,other=other)
         self.slow_controller.setup(ego=ego,other=other)
 
-        if self.ego is not None and ego.state["velocity"]>self.speed_limit/2:
-            self.controller = self.slow_controller
-        else:
-            self.controller = self.fast_controller
-
-        self.timestep = ego.timestep
-
 
     def selectAction(self,state,lim_accel_range,lim_angle_range):
+        if self.controller is None:
+            if state["velocity"]>self.speed_limit/2:
+                self.controller = self.slow_controller
+                self.time = random.uniform(self.slow_time_range[0],self.slow_time_range[1])
+            else:
+                self.controller = self.fast_controller
+                self.time = random.uniform(self.fast_time_range[0],self.fast_time_range[1])
+
         #next_vel = state["velocity"]+self.ego.timestep*self.controller.accel
         if state["velocity"]<.5:
             if self.controller is self.slow_controller and self.time>self.stop_time_range[1]:

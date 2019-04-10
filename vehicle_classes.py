@@ -11,7 +11,7 @@ car_width = 2.097
 #Alternative values could be length=5m, width=2 as per "model-based threat assessment for avoiding arbitrary vehicle collisions"-Br\{"}annstr\{"}om
 
 class Car():
-    def __init__(self,controller,is_ego,label,debug=False,is_demo=True,timestep=.1):
+    def __init__(self,controller,is_ego,label,debug=False,is_demo=True,is_interactive=True,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -66,6 +66,8 @@ class Car():
         self.is_complete = False
         self.in_demo = is_demo #if car is in demo mode then all non-ego cars cycle through objectives (see is_complete). 
                                #When not in demo is_complete for non-ego is not reset
+        self.is_interactive = is_interactive #if car is not interactive then it cannot crash into other vehicles or be crashed into
+                                             # this is useful if you want to duplicate a car to generate data but don't want the original car to crash into duplicate 
 
         self.label = "C{}".format(label)
 
@@ -94,6 +96,31 @@ class Car():
     def state(self):
         """Define the state of the car so that it can be called at any time during the simulation"""
         return self.composeState()
+
+
+    def copy(self):
+        """Returns a car object with the same initial parameters as the car being copied.
+           The copy is,by default, not interactive since, if it were interactive, it would immediately crash into the car it was copied from"""
+        dup = Car(controller=None,label="DUMMY{}".format(self.label),is_ego=self.is_ego,is_demo=self.in_demo,is_interactive=False,timestep=self.timestep)
+        dup.controllers = {}
+        if self.debug:
+            print("Loading controllers from {} to {}".format(self.label,dup.label))
+        for controller in self.controllers:
+            if self.controllers[controller] is not None:
+                dup.controllers[controller] = self.controllers[controller].copy(target=dup)
+            else:
+                dup.controllers[controller] = None
+            if self.controller == self.controllers[controller]:
+                #Not sure what the initial setting for the controller should be
+                #Initially I thought it should be default, but this creates problems if vehicle
+                # has different controllers at different times
+                dup.controller = dup.controllers[controller]
+        if self.debug:
+            print("Finished loading controllers from {} to {}".format(self.label,dup.label))
+        if self.initialisation_params != []:
+            #If this car has already been initialised then copy should also be initialsed
+            dup.initSetup(*self.initialisation_params)
+        return dup
 
 
     def distToObj(self):
@@ -203,16 +230,17 @@ class Car():
         #Initialise Trajectory and Waypoint
         #dest also contains [0,1] lane specification, but for the time being we don't use that
         if dest[1]:
-            destination = dest[0].top_up_lane.to_junction
+            self.destination = dest[0].top_up_lane.to_junction
         else:
-            destination = dest[0].bottom_down_lane.to_junction
+            self.destination = dest[0].bottom_down_lane.to_junction
         self.traj_posit = 0
-        self.trajectory,self.waypoints = trajectory_builder.initialiseTrajectory(road,is_top_lane,destination)
+        self.trajectory,self.waypoints = trajectory_builder.initialiseTrajectory(road,is_top_lane,self.destination)
         if self.debug:
             print("{}: Trajectory is built".format(self.label))
             print("{} has TRAJECTORY: {}".format(self.label,[x.label for x in self.trajectory]))
 
-        self.checkPositState()
+        self.sense()
+        #self.checkPositState()
 
         self.initialisation_params = [road_lane,dest,v,accel,turn_angle,x_disp,y_disp]
 
@@ -264,14 +292,14 @@ class Car():
     def setController(self,tag=None,controller=None):
         if controller is not None:
             if controller not in [self.controllers[x] for x in self.controllers]:
-                print("Error: Controller can't be set as this controller has not been added to the vehicle")
+                print("Vehicle_Classes Error: Controller can't be set as this controller has not been added to the vehicle")
                 print("Controller: {}\tLoaded Controllers: {}".format(controller,self.controllers))
                 exit(-1) #Should this be an exit?
             else:
                 self.controller = controller
         elif tag is not None:
             if tag not in self.controllers:
-                print("Error: Controller can't be set as this controller has not been added to the vehicle")
+                print("Vehicle_Classes Error: Controller can't be set as this controller has not been added to the vehicle")
                 print("Controller: {}\tLoaded Controllers: {}".format(tag,self.controllers))
                 exit(-1)
             else:
@@ -424,7 +452,8 @@ class Car():
         # be other cars
         for obj in self.on:
             for entry in obj.on:
-                if entry not in potentials and entry is not self:
+                #Only include in potentials obstacles that are interactive
+                if entry not in potentials and entry.is_interactive and entry is not self:
                     potentials.append(entry)
 
         for veh in potentials:
@@ -467,7 +496,7 @@ class Car():
         if self.debug: print("New list on: {}".format([x.label for x in self.on]))
 
         #No point repeatedly checking for a crash that already happened
-        if not self.crashed:
+        if self.is_interactive and not self.crashed:
             crashed,crash_list = self.checkForCrash()
             if crashed:
                 self.crashed = True
@@ -552,6 +581,7 @@ class Car():
 
                 #Match velocity with other vehicle to avoid immediately crashing again
                 self.v = crash_vel
+                print("After crash velocity reset to: {}".format(self.v))
 
                 #Assert crash has been avoided an check if this is the case
                 self.crashed = False

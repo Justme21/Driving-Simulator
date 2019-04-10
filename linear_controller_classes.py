@@ -1,9 +1,10 @@
 import linear_controller_profiles as lcp
 import math
+import random
 
 class DrivingController():
 
-    def __init__(self,controller="standard",speed_limit=22.5,speed_limit_buffer=None,ego=None,other=None,timestep=.1,delay=0,**kwargs):
+    def __init__(self,controller="standard",speed_limit=22.5,speed_limit_buffer=None,ego=None,other=None,timestep=.1,**kwargs):
         if speed_limit_buffer is None:
             speed_limit_buffer = .1*speed_limit
 
@@ -25,7 +26,8 @@ class DrivingController():
 
     def getController(self,controller,**kwargs):
         controller_list = {"standard":lcp.StandardDrivingController,"follow":lcp.FollowController,"generator":lcp.DataGeneratorController,\
-                "fast":lcp.GoFastController,"slow":lcp.GoSlowController,"overtake":lcp.OvertakeController,"random":lcp.RandomController}
+                "fast":lcp.GoFastController,"slow":lcp.GoSlowController,"overtake":lcp.OvertakeController,"trajectory":lcp.TrajectoryController\
+                ,"random":lcp.RandomController}
 
         return controller_list[controller](**kwargs)
 
@@ -98,10 +100,7 @@ class DrivingController():
 
 
     def chooseAction(self,state,accel_range,angle_range):
-        #full_state = self.defineState(in_state)
         accel,angle_accel = self.controller.selectAction(state,accel_range,angle_range)
-
-        #print("Action here is: {}".format((accel,angle_accel)))
 
         #HACKY: This needs to be removed. Inserted to facilitate first year review results
         next_vel = self.ego.state["velocity"] + self.ego.timestep*accel
@@ -113,7 +112,9 @@ class DrivingController():
         elif next_vel>self.speed_limit:
             accel = min(accel_range[1],max(accel_range[0],(self.speed_limit-self.ego.state["velocity"])/self.ego.timestep))
 
-        #print("Action to  DelayedController is: {}".format((accel,angle_accel)))
+        if accel>3.5:
+            print("Accel too high")
+            exit(-1)
 
         return (accel,angle_accel)
 
@@ -144,10 +145,44 @@ class DrivingController():
         return x_dot,y_dot,v_dot,head_dot
 
 
+    def paramCopy(self,target=None):
+        dup_initialisation_params = dict(self.initialisation_params)
+        dup_initialisation_params["ego"] = target #target is the vehicle the controller is being copied for
+        return dup_initialisation_params
+
+
+    def copy(self,**kwargs):
+        dup_init_params = self.paramCopy(**kwargs)
+        return DrivingController(controller=self.controller_tag,**dup_init_params)
+
+
+class MultiDrivingController(DrivingController):
+    """Variant on Driving Controller that has a choice of mulitple controllers
+       Each time the controller is reset (each time the vehicle being controlled is reset) a new controller
+       from which to choose actions is sampled. This is mainly useful for data generation to generate more diverse
+       behaviours."""
+
+    def __init__(self,controllers=["standard"],**kwargs):
+        self.controllers = list(controllers)
+        self.controller_tag = random.choice(self.controllers)
+        kwargs.update({'controllers':controllers})
+        super().__init__(controller=self.controller_tag,**kwargs)
+
+
+    def reset(self):
+        self.controller_tag = random.choice(self.controllers)
+        super().reset()
+
+
+    def copy(self,**kwargs):
+        dup_init_params = super().paramCopy(**kwargs)
+        return MultiDrivingController(**dup_init_params)
+
+
 class DelayedDrivingController(DrivingController):
 
     def __init__(self,delay=0,timestep=.1,**kwargs):
-        kwargs.update({'timestep':timestep})
+        kwargs.update({'timestep':timestep,'delay':delay})
         super().__init__(**kwargs)
 
         self.action_list = [(0,0) for _ in range(int(delay/timestep))]
@@ -155,12 +190,9 @@ class DelayedDrivingController(DrivingController):
 
     def chooseAction(self,*args):
         action = super().chooseAction(*args)
-        #print("Action received by DelayedController is: {}".format(action))
         self.action_list.append(action)
         action = self.action_list.pop(0)
 
-        #print("ActionList for DelayedController is: {}".format(self.action_list))
-        #print("Action output by DelayedController: {}".format(action))
         return action
 
 
@@ -178,10 +210,15 @@ class DelayedDrivingController(DrivingController):
         self.action_list = [(0,0) for _ in range(len(self.action_list))]
 
 
+    def copy(self,**kwargs):
+        dup_init_params = super().paramCopy(**kwargs)
+        return DelayedDrivingController(**dup_init_params)
+
+
 class ProactiveDrivingController(DelayedDrivingController):
 
     def __init__(self,anticipation_time=0,awareness_coef=.1,non_ego_trajectory=None,timestep=.1,**kwargs):
-        kwargs.update({'timestep':timestep})
+        kwargs.update({'timestep':timestep,'anticipation_time':anticipation_time,'awareness_coef':awareness_coef,'non_ego_trajectroy':non_ego_trajectory})
 
         super().__init__(**kwargs)
         self.timestep = timestep
@@ -222,7 +259,6 @@ class ProactiveDrivingController(DelayedDrivingController):
             else:
                 traj_point = self.other_trajectory[self.traj_index+i]
                 if (self.other_trajectory[self.traj_index][1]<0) != (traj_point[1]<0):# or self.other_trajectory[self.traj_index][1]>0 != traj_point[1]>0:
-                    #print("Proactive Controller Breaking out: {}vs.{}".format(self.other_trajectory[self.traj_index][1],traj_point[1]))
                     #This cripples the proactive controller so it cannot anticipate actions that are not consistent with the current trend
                     break
                 #Placeholder value of 90 for heading since we know trajectory will be linear
@@ -237,15 +273,12 @@ class ProactiveDrivingController(DelayedDrivingController):
                 state["heading"] = state["heading"]+head_dot*self.timestep
                 state["acceleration"] = action[0]
                 state = super().inferFeatures(state)
-#                print("I: {}\tTraj: {}\nState: {}".format(i,traj_point,state))
 
         tot_action = [x/determinant for x in tot_action]
         self.action_list = action_list
         if self.other_trajectory is not None:
             print("Action is: {}\n".format(tot_action))
             self.traj_index += 1
-        #print("Tot Action at end of ProactiveController is: {}".format(tot_action))
-        #print("ActionList at end of ProactiveController is: {} with {} the chosen action".format(self.action_list,tot_action))
         return (tot_action[0],tot_action[1])
 
 
@@ -263,6 +296,11 @@ class ProactiveDrivingController(DelayedDrivingController):
         super().reset()
         if self.traj_index is not None:
             self.traj_index = 0
+
+
+    def copy(self,**kwargs):
+        dup_init_params = super().paramCopy(**kwargs)
+        return ProactiveDrivingController(controller=self.controller_tag,**dup_init_params)
 
 
 def distance(pt1,pt2):

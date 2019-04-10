@@ -116,8 +116,10 @@ class Simulator():
                 car.chooseAction()
             else:
                 if index<len(move_dict[car]):
+                    print("Car {} is still on their trajectory".format(car.label))
                     car.setAction(move_dict[car][index][0],move_dict[car][index][1])
                 else:
+                    print("Car {} has reached the end of their trajectory and now is not accelerating anymore".format(car.label))
                     car.setAction(0,0)
             car.move()
         if self.graphic: self.g_sim.update()
@@ -145,6 +147,7 @@ class Simulator():
                     break
             self.time += self.dt
             self.endStep()
+        self.setGraphic(False)
 
 
     def endStep(self):
