@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import linear_controller_profiles as lcp
 import math
 import random
@@ -27,7 +28,7 @@ class DrivingController():
     def getController(self,controller,**kwargs):
         controller_list = {"standard":lcp.StandardDrivingController,"follow":lcp.FollowController,"generator":lcp.DataGeneratorController,\
                 "fast":lcp.GoFastController,"slow":lcp.GoSlowController,"overtake":lcp.OvertakeController,"trajectory":lcp.TrajectoryController\
-                ,"random":lcp.RandomController}
+                ,"random":lcp.RandomController,"random-unbiased":lcp.UnbiasedRandomController,"manual":lcp.ManualController,"constant":lcp.ConstantVelocityController}
 
         return controller_list[controller](**kwargs)
 
@@ -47,9 +48,9 @@ class DrivingController():
 
     def getAccelRange(self,state):
         accel_range = self.controller.getAccelRange(state)
-        angle_range = self.controller.getAngleRange(state)
+        yaw_rate_range = self.controller.getAngleRange(state)
 
-        return accel_range,angle_range
+        return accel_range,yaw_rate_range
 
 
     def extractFeatures(self,in_state):
@@ -99,33 +100,41 @@ class DrivingController():
         return full_state
 
 
-    def chooseAction(self,state,accel_range,angle_range):
-        accel,angle_accel = self.controller.selectAction(state,accel_range,angle_range)
+    def chooseAction(self,state,accel_range,yaw_rate_range):
+        accel,yaw_rate = self.controller.selectAction(state,accel_range,yaw_rate_range)
 
         #HACKY: This needs to be removed. Inserted to facilitate first year review results
-        next_vel = self.ego.state["velocity"] + self.ego.timestep*accel
+        try:
+            next_vel = self.ego.state["velocity"] + self.ego.timestep*accel
+        except TypeError:
+            print("LINEAR_CONTROLLER_CLASSES ERROR: State: {}\tTimestep: {}\tAccel: {}\tYaw_Rate: {}".format(self.ego.state,self.ego.timestep,accel,yaw_rate))
+            print("Controller is: {}: ({})".format(type(self),type(self.controller)))
+            exit(-1)
         if accel_range == [None,None]:
             accel_range = list(accel_range)
             accel_range = self.controller.accel_range
         if next_vel<0:
-            accel = max(accel_range[0],-self.ego.state["velocity"]/self.ego.timestep)
+            accel = max(accel_range[0],min(accel_range[1],-self.ego.state["velocity"]/self.ego.timestep))
         elif next_vel>self.speed_limit:
             accel = min(accel_range[1],max(accel_range[0],(self.speed_limit-self.ego.state["velocity"])/self.ego.timestep))
 
-        if accel>3.5:
-            print("Accel too high")
+        if accel>accel_range[1] or accel<accel_range[0]:
+            #This can't happen now, but this has left open the problem that self.ego.state["velocity"] sometimes dips below 0, even though
+            # that shouldn't happen
+            print("LCC ERROR: Accel too high")
+            print("Ego State: {}\tNext_vel: {}\tChosen Accel: {}\tAccel_Range: {}".format(self.ego.state,next_vel,accel,accel_range))
             exit(-1)
 
-        return (accel,angle_accel)
+        return (accel,yaw_rate)
 
 
-    def selectAction(self,in_state,accel_range,angle_range):
+    def selectAction(self,in_state,accel_range,yaw_rate_range):
         state = self.defineState(in_state)
-        action = self.chooseAction(dict(state),accel_range,angle_range)
+        action = self.chooseAction(dict(state),accel_range,yaw_rate_range)
 
-        (accel,angle_accel) = action
+        (accel,yaw_rate) = action
         self.log.append([state,accel])
-        return accel,angle_accel
+        return accel,yaw_rate
 
 
     def reset(self):
@@ -140,8 +149,8 @@ class DrivingController():
         self.log = []
 
 
-    def testAction(self,accel,angle_accel,vel=None,heading=None):
-        x_dot,y_dot,v_dot,head_dot = self.ego.simulateDynamics(accel,angle_accel,vel,heading)
+    def testAction(self,accel,yaw_rate,vel=None,heading=None):
+        x_dot,y_dot,v_dot,head_dot = self.ego.simulateDynamics(accel,yaw_rate,vel,heading)
         return x_dot,y_dot,v_dot,head_dot
 
 
@@ -200,9 +209,9 @@ class DelayedDrivingController(DrivingController):
         state = super().defineState(in_state)
         action = self.chooseAction(dict(state),*args)
 
-        (accel,angle_accel) = action
+        (accel,yaw_rate) = action
         self.log.append([state,accel])
-        return accel,angle_accel
+        return accel,yaw_rate
 
 
     def reset(self):
@@ -218,7 +227,7 @@ class DelayedDrivingController(DrivingController):
 class ProactiveDrivingController(DelayedDrivingController):
 
     def __init__(self,anticipation_time=0,awareness_coef=.1,non_ego_trajectory=None,timestep=.1,**kwargs):
-        kwargs.update({'timestep':timestep,'anticipation_time':anticipation_time,'awareness_coef':awareness_coef,'non_ego_trajectroy':non_ego_trajectory})
+        kwargs.update({'timestep':timestep,'anticipation_time':anticipation_time,'awareness_coef':awareness_coef,'non_ego_trajectory':non_ego_trajectory})
 
         super().__init__(**kwargs)
         self.timestep = timestep
@@ -238,17 +247,17 @@ class ProactiveDrivingController(DelayedDrivingController):
         self.traj_index = 0
 
 
-    def chooseAction(self,state,accel_range,angle_range):
+    def chooseAction(self,state,accel_range,yaw_rate_range):
         tot_action = [0,0]
         determinant = 0
         #print("ActionList for ProactiveController is: {}".format(self.action_list))
         action_list = None #temporary copy of list
         #print("Proactive")
-        if self.other_trajectory is not None:
-            print("Index: {}\tState: {}".format(self.traj_index,state))
+        if self.other_trajectory is None and self.other is not None and isinstance(self.other.controller.controller,lcp.TrajectoryController):
+            self.setTargetTrajectory(self.other.controller.controller.trajectory)
 
         for i in range(0,self.anticipation_time+1):
-            action = super().chooseAction(state,accel_range,angle_range)
+            action = super().chooseAction(state,accel_range,yaw_rate_range)
             #print("In ProactiveController in Loop ActionList is: {}".format(self.action_list))
             if i==0: action_list = list(self.action_list) #The main action_list only wants to store what you woul
             #print("I: {}\t State:{}\tAction: {}".format(i,state,action))
@@ -258,11 +267,11 @@ class ProactiveDrivingController(DelayedDrivingController):
             if self.other_trajectory is None or self.traj_index+i>=len(self.other_trajectory): break
             else:
                 traj_point = self.other_trajectory[self.traj_index+i]
-                if (self.other_trajectory[self.traj_index][1]<0) != (traj_point[1]<0):# or self.other_trajectory[self.traj_index][1]>0 != traj_point[1]>0:
+                if (self.other_trajectory[self.traj_index][1][0]<0) != (traj_point[1][0]<0):# or self.other_trajectory[self.traj_index][1]>0 != traj_point[1]>0:
                     #This cripples the proactive controller so it cannot anticipate actions that are not consistent with the current trend
                     break
                 #Placeholder value of 90 for heading since we know trajectory will be linear
-                x_dot,y_dot,v_dot,head_dot = super().testAction(traj_point[1],0,state["other_v"],90)
+                x_dot,y_dot,v_dot,head_dot = super().testAction(traj_point[1][0],traj_point[1][1],state["other_v"],90)
                 state["other_v"] = state["other_v"] + v_dot*self.timestep #we assume trajectory has same length timestep
                 state["other_position"] = (state["other_position"][0]+x_dot*self.timestep,state["other_position"][1]+y_dot*self.timestep)
                 state["other_accel"] = traj_point[1]
@@ -277,25 +286,24 @@ class ProactiveDrivingController(DelayedDrivingController):
         tot_action = [x/determinant for x in tot_action]
         self.action_list = action_list
         if self.other_trajectory is not None:
-            print("Action is: {}\n".format(tot_action))
             self.traj_index += 1
         return (tot_action[0],tot_action[1])
 
 
-    def selectAction(self,in_state,accel_range,angle_range):
+    def selectAction(self,in_state,accel_range,yaw_rate_range):
         state = super().defineState(in_state)
 
-        action = self.chooseAction(dict(state),accel_range,angle_range)
-        (accel,angle_accel) = action
+        action = self.chooseAction(dict(state),accel_range,yaw_rate_range)
+        (accel,yaw_rate) = action
 
         self.log.append([state,accel])
-        return accel,angle_accel
+        return accel,yaw_rate
 
 
     def reset(self):
         super().reset()
-        if self.traj_index is not None:
-            self.traj_index = 0
+        self.traj_index = None
+        self.trajectory = None
 
 
     def copy(self,**kwargs):

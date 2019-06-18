@@ -116,10 +116,8 @@ class Simulator():
                 car.chooseAction()
             else:
                 if index<len(move_dict[car]):
-                    print("Car {} is still on their trajectory".format(car.label))
                     car.setAction(move_dict[car][index][0],move_dict[car][index][1])
                 else:
-                    print("Car {} has reached the end of their trajectory and now is not accelerating anymore".format(car.label))
                     car.setAction(0,0)
             car.move()
         if self.graphic: self.g_sim.update()
@@ -262,17 +260,17 @@ def canGo(cars):
     return can_go
 
 
-def initialiseControlledCars(num_cars,controllers,accel_range,angle_range,debug):
+def initialiseControlledCars(num_cars,controllers,accel_range,yaw_rate_range,debug):
     """Initialises the specified number of cars with the indicated controllers. Any cars with unspecified controllers
        get random action controllers by default. First car initialised (with the first provided controller) is the ego
        vehicle by default.
        num_cars: [int] number of cars to be initialised
        controllers: [list] list of linear_controller_classes objects to be assigned to the cars
        accel_range: [list] list indicating the lower and upper range for the linear acceleration
-       angle_range: [list] list inidicating the lower and upper range for the angular acceleration
+       yaw_rate_range: [list] list inidicating the lower and upper range for the angular acceleration
        debug: [bool] indicates whether or not debug print statements should be printed"""
     cars = []
-    controllers += [lcc.RandomController(accel_range,angle_range) for _ in range(num_cars-len(controllers))]
+    controllers += [lcc.RandomController(accel_range,yaw_rate_range) for _ in range(num_cars-len(controllers))]
     is_ego = True
     for i in range(num_cars):
         cars.append(vehicle_classes.Car(controllers[i],is_ego,i,debug))
@@ -281,7 +279,7 @@ def initialiseControlledCars(num_cars,controllers,accel_range,angle_range,debug)
 
 
 def runSimulation(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,num_cars,controllers,\
-                  accel_range,angle_range,run_graphics,draw_traj,debug,starts,dests,car_speeds=None):
+                  accel_range,yaw_rate_range,run_graphics,draw_traj,debug,starts,dests,car_speeds=None):
     """This function runs the simulation given the specified parameters.
         num_junctions: - desired number of junctions in the map being created
         num_roads: - desired number of roads in the map being created
@@ -291,7 +289,7 @@ def runSimulation(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,nu
         junc_pairs: - specifies which roads should be linked together. Is a list of 2 entry numeric tuples
                       indicating the meeting of two roads at a junction
         accel_cats: - the ranges from which the controller for the cars can select the acceleration
-        angle_cats: - the ranges from which the controller for the cars can select the angle change
+        yaw_rate_cats: - the ranges from which the controller for the cars can select the angle change
         run_graphics: - boolean indicating whether or not the simulator should produce graphical output
         debug: - boolean indicating whether or not the simulator is being debugged. Affects stdout but not run
         car_speeds: - optional parameter that, if provided, specifies the speeds each of the cars travels with
@@ -299,7 +297,7 @@ def runSimulation(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,nu
     clock = 0
     runtime = 20.0
 
-    cars = initialiseControlledCars(num_cars,controllers,accel_range,angle_range,debug)
+    cars = initialiseControlledCars(num_cars,controllers,accel_range,yaw_rate_range,debug)
     simulator = Simulator(run_graphics,draw_traj,runtime,debug,dt=.1)
     simulator.loadCars(cars)
 
@@ -345,7 +343,7 @@ if __name__ == "__main__":
 
     num_episodes = 10000
     accel_range = [-3,3]
-    angle_range = [-5,5]
+    yaw_rate_range = [-5,5]
     controllers = []
     runSimulation(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,num_cars,controllers,\
-                  accel_range,angle_range,run_graphics,draw_traj,debug,starts,dests,car_speeds)
+                  accel_range,yaw_rate_range,run_graphics,draw_traj,debug,starts,dests,car_speeds)

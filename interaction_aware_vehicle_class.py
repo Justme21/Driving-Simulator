@@ -26,7 +26,7 @@ class InteractionConsciousCar(Car):
 
     def copy(self,dup=None):
         if dup is None or not isinstance(dup,InteractionConsciousCar):
-            dup = InteractionConsciousCar(controller=None,label="IDUMMY{}".format(self.label),is_ego=self.is_ego,is_demo=self.in_demo,is_interactive=False,timestep=self.timestep)
+            dup = InteractionConsciousCar(controller=None,label="IDUMMY{}".format(self.label),is_ego=self.is_ego,is_demo=self.in_demo,debug=True,is_interactive=False,timestep=self.timestep)
 
         dup.interactive_obstacles = self.interactive_obstacles
         dup.interactionCost = self.interactionCost

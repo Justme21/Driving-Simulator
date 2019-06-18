@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import math
 import random
 import road_classes
@@ -11,7 +12,7 @@ car_width = 2.097
 #Alternative values could be length=5m, width=2 as per "model-based threat assessment for avoiding arbitrary vehicle collisions"-Br\{"}annstr\{"}om
 
 class Car():
-    def __init__(self,controller,is_ego,label,debug=False,is_demo=True,is_interactive=True,timestep=.1):
+    def __init__(self,controller=None,is_ego=False,label="DEFAULT_LABEL",debug=False,is_demo=True,is_interactive=True,timestep=.1):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -25,7 +26,7 @@ class Car():
         #Velocity and accelerations of the car of the car
         self.v = None #units are metres per second
         self.accel = None # metres per second squared
-        self.turn_angle= None #radians/degrees per metres squared (?)
+        self.yaw_rate= None #radians/degrees per metres squared (?)
 
         #Heading of the car (direction it is facing in degrees)
         self.heading = None
@@ -98,10 +99,11 @@ class Car():
         return self.composeState()
 
 
-    def copy(self):
+    def copy(self,dup=None):
         """Returns a car object with the same initial parameters as the car being copied.
            The copy is,by default, not interactive since, if it were interactive, it would immediately crash into the car it was copied from"""
-        dup = Car(controller=None,label="DUMMY{}".format(self.label),is_ego=self.is_ego,is_demo=self.in_demo,is_interactive=False,timestep=self.timestep)
+        if dup is None:
+            dup = Car(controller=None,label="DUMMY{}".format(self.label),is_ego=self.is_ego,is_demo=self.in_demo,is_interactive=False,timestep=self.timestep)
         dup.controllers = {}
         if self.debug:
             print("Loading controllers from {} to {}".format(self.label,dup.label))
@@ -119,7 +121,18 @@ class Car():
             print("Finished loading controllers from {} to {}".format(self.label,dup.label))
         if self.initialisation_params != []:
             #If this car has already been initialised then copy should also be initialsed
+            #This means if we reset this vehicle it will reset to the same place as the original  
             dup.initSetup(*self.initialisation_params)
+
+            #Set the current state of the duplicate to match the original
+            dup.setMotionParams((self.x_com,self.y_com),self.heading,self.v)
+            dup.setAction(self.accel,self.yaw_rate)
+            for obj in self.on:
+                #What objects you can collide with/be on depends on what you are currently on
+                # so manually put on the objects the original is currently on.
+                dup.putOn(obj)
+            #Update the duplicate's state
+            dup.sense()
         return dup
 
 
@@ -172,7 +185,7 @@ class Car():
             obj.takeOff(self)
 
 
-    def initSetup(self,road_lane,dest,v,accel=0,turn_angle=0,prev_disp_x=None,prev_disp_y=None):
+    def initSetup(self,road_lane,dest,v,accel=0,yaw_rate=0,prev_disp_x=None,prev_disp_y=None):
         """Performing initial setup of the car. Input is reference to lane that the
            vehicle is generated on."""
         self.on = []
@@ -225,7 +238,7 @@ class Car():
         self.v = v
 
         self.accel = accel
-        self.turn_angle = turn_angle
+        self.yaw_rate = yaw_rate
 
         #Initialise Trajectory and Waypoint
         #dest also contains [0,1] lane specification, but for the time being we don't use that
@@ -240,9 +253,8 @@ class Car():
             print("{} has TRAJECTORY: {}".format(self.label,[x.label for x in self.trajectory]))
 
         self.sense()
-        #self.checkPositState()
 
-        self.initialisation_params = [road_lane,dest,v,accel,turn_angle,x_disp,y_disp]
+        self.initialisation_params = [road_lane,dest,v,accel,yaw_rate,x_disp,y_disp]
 
 
     def reinitialise(self):
@@ -260,33 +272,40 @@ class Car():
         return pass_state
 
 
-    def chooseAction(self,accel_range=None,angle_range=None,particles=None):
+    def chooseAction(self,accel_range=None,yaw_rate_range=None,particles=None):
         """Merge the public and private states and pass this to the vehicle controller to get linear and angular accelerations"""
         state = self.composeState()
         if accel_range is None: accel_range = [None,None]
-        if angle_range is None: angle_range = [None,None]
+        if yaw_rate_range is None: yaw_rate_range = [None,None]
 
         if particles is None:
-            self.accel,self.turn_angle = self.controller.selectAction(state,accel_range,angle_range)
+            self.accel,self.yaw_rate = self.controller.selectAction(state,accel_range,yaw_rate_range)
         else:
-            self.accel,self.turn_angle = self.controller.selectAction(state,accel_range,angle_range,particles)
+            self.accel,self.yaw_rate = self.controller.selectAction(state,accel_range,yaw_rate_range,particles)
+
+        self.updatePublicState()
 
 
-    def setAction(self,accel=None,turn_angle=None):
+    def setAction(self,accel=None,yaw_rate=None):
         if accel is not None:
             self.accel = accel
-        if turn_angle is not None:
-            self.turn_angle = turn_angle
+        if yaw_rate is not None:
+            self.yaw_rate = yaw_rate
+
+        self.updatePublicState()
 
 
     def setMotionParams(self,posit=None,heading=None,vel=None):
         if posit is not None:
             self.x_com = posit[0]
             self.y_com = posit[1]
+            self.setFourCorners()
         if heading is not None:
             self.heading = heading
         if vel is not None:
             self.v = vel
+
+        self.sense() #This is sense as the change in position might have caused a collision
 
 
     def setController(self,tag=None,controller=None):
@@ -313,10 +332,16 @@ class Car():
         self.controllers.update(controller_dict)
 
 
-    def simulateDynamics(self,lin_accel,turn_angle,init_vel=None,init_heading=None):
+    def simulateDynamics(self,lin_accel,yaw_rate,init_vel=None,init_heading=None,dt=None):
         """Simulate the consequences of applying linear acceleration v_dot and angular acceleration
            head_dot on the current state of the car using the specified vehicle dynamics"""
-        slip_angle = math.atan(math.tan(math.radians(turn_angle))*self.Lr/(self.Lr+self.Lf))
+
+        if dt is None:
+            #dt is None if the dynamics are being simulated in standard time (as opposed to some specified timestep size
+            # that is not the default vehicle timestep. Otherwise just use default
+            dt = self.timestep
+
+        slip_angle = math.atan(math.tan(math.radians(yaw_rate))*self.Lr/(self.Lr+self.Lf))
 
         #IS THIS A CORRECT WAY TO GO FROM rad/s -> deg/s ?
         heading_dot = math.degrees((self.v/self.Lr)*math.sin(slip_angle))
@@ -332,8 +357,8 @@ class Car():
         if init_heading is not None: head = init_heading
         else: head = self.heading
 
-        v = vel + v_dot*self.timestep
-        heading = head + heading_dot*self.timestep
+        v = vel + v_dot*dt
+        heading = head + heading_dot*dt
 
 
         x_dot = v*math.cos(math.radians(heading)+slip_angle)
@@ -342,22 +367,28 @@ class Car():
         return x_dot,y_dot,v_dot,heading_dot
 
 
-    def move(self,num_timesteps=1):
+    def move(self,dt=None,num_timesteps=1):
         """The motion dynamics of the vehicle. Given an input acceleration and wheel-
            angle this determines how much the vehicle should move, and then resets the
            vehicles coordinates appropriately."""
 
+        if dt is None:
+            #if dt is not None then the calling function has specified a timestep size.
+            # otherwise just use default. 
+            dt = self.timestep
+
         num_timesteps = max(1,int(num_timesteps)) #Ensure the number of timesteps is always an integer
 
-        x_dot,y_dot,v_dot,heading_dot = self.simulateDynamics(self.accel,self.turn_angle)
+        x_dot,y_dot,v_dot,heading_dot = self.simulateDynamics(self.accel,self.yaw_rate,dt=dt)
 
-        self.x_com += self.timestep*num_timesteps*x_dot
-        self.y_com += self.timestep*num_timesteps*y_dot
 
-        self.v += v_dot*self.timestep*num_timesteps
-        self.heading = (self.heading + heading_dot*self.timestep*num_timesteps)%360
+        self.x_com += dt*num_timesteps*x_dot
+        self.y_com += dt*num_timesteps*y_dot
 
-        self.time += self.timestep*num_timesteps
+        self.v += v_dot*dt*num_timesteps
+        self.heading = (self.heading + heading_dot*dt*num_timesteps)%360
+
+        self.time += dt*num_timesteps
 
         self.setFourCorners()
         self.updatePublicState()
@@ -375,6 +406,11 @@ class Car():
         # we were already on. Thus we find candidates by considering self.on.
         for obj in list(self.on):
             obj_coord = obj.four_corners
+
+            if isinstance(obj,road_classes.Road):
+                for lane in [obj.top_up_lane,obj.bottom_down_lane]:
+                    if lane not in self.on:
+                        candidates.append(lane)
 
             if isinstance(obj,road_classes.Lane):
                 #We compute the distance from the car to the object by choosing
@@ -441,6 +477,20 @@ class Car():
                 self.takeOff(obj)
 
 
+    def evaluateCrash(self,obj):
+        """Checks if the car has crashed into a specified object"""
+        obj_coords = obj.four_corners
+        for entry in self.four_corners:
+            pt = self.four_corners[entry]
+            if sideOfLine(pt,obj_coords["front_left"],obj_coords["front_right"])!=\
+               sideOfLine(pt,obj_coords["back_left"],obj_coords["back_right"]) and\
+               sideOfLine(pt,obj_coords["front_left"],obj_coords["back_left"])!=\
+               sideOfLine(pt,obj_coords["front_right"],obj_coords["back_right"]):
+                   return True
+
+        return False
+
+
     def checkForCrash(self):
         """Determines whether or not the car has crashed into another object.
            Returns True/False and a list containing all the objects it has crashed into
@@ -456,17 +506,21 @@ class Car():
                 if entry not in potentials and entry.is_interactive and entry is not self:
                     potentials.append(entry)
 
+        if self.debug:
+            print("{} could potentially crash into: {}".format(self.label,[x.label for x in potentials]))
+
         for veh in potentials:
-            veh_coords = veh.four_corners
-            for entry in self.four_corners:
-                pt = self.four_corners[entry]
-                if sideOfLine(pt,veh_coords["front_left"],veh_coords["front_right"])!=\
-                   sideOfLine(pt,veh_coords["back_left"],veh_coords["back_right"]) and\
-                   sideOfLine(pt,veh_coords["front_left"],veh_coords["back_left"])!=\
-                   sideOfLine(pt,veh_coords["front_right"],veh_coords["back_right"]):
-                       has_crashed = True
-                       crashed.append(veh)
-                       break
+            crash = self.evaluateCrash(veh)
+            if crash:
+                has_crashed = True
+                crashed.append(veh)
+
+        if self.debug:
+            if has_crashed:
+                print("{} has crashed into: {}".format(self.label,[x.label for x in crashed]))
+            else:
+                print("{} has avoided all crashes".format(self.label))
+
         return has_crashed,crashed
 
 
@@ -476,10 +530,14 @@ class Car():
            object."""
 
         #First check if you are moving onto a new road section
-        if self.debug: print("Currently on: {}".format([x.label for x in self.on]))
-        if self.debug: print("Checking On Anything New")
+        if self.debug:
+            print("Beginning check of Posit State for: {}".format(self.label))
+            print("Currently on: {}".format([x.label for x in self.on]))
+            print("Checking On Anything New")
         on_candidates = self.checkNewOn()
-        if self.debug: print("Done Checking On")
+        if self.debug:
+            print("Done Checking On")
+            print("Candidates for Newly on are: {}".format([x.label for x in on_candidates]))
         #Check if you have left anything you were on before
         self.checkNewOff()
         #Check if we are sufficiently "on" any of the candidates identified earlier
@@ -507,6 +565,7 @@ class Car():
                     self.printStatus()
                     for entry in crash_list:
                         entry.printStatus()
+                    print("Terminating Simulation")
                     exit(-1)
 
         #Progress the Trajectory Goal
@@ -535,6 +594,9 @@ class Car():
         if self.traj_posit < len(self.waypoints):
             self.waypoint_distance = computeDistance([self.x_com,self.y_com],self.waypoints[self.traj_posit])
         else: self.waypoint_distance = computeDistance([self.x_com,self.y_com],self.waypoints[-1])
+
+        if self.debug:
+            print("End Checking of Posit State for {}\n".format(self.label))
 
 
     def resetAfterCrash(self,move_distance=None):
@@ -600,7 +662,7 @@ class Car():
         state["velocity"] = self.v
         state["heading"] = self.heading
         state["acceleration"] = self.accel
-        state["turn_angle"] = self.turn_angle
+        state["yaw_rate"] = self.yaw_rate
         state["four_corners"] = self.four_corners
 
         self.pub_state = state
@@ -629,8 +691,9 @@ class Car():
         for x in self.four_corners:
             dims += "{}({},{}), ".format(corner_labels[x],round(self.four_corners[x][0],2),\
                                          round(self.four_corners[x][1],2))
-            print("{}{}\tON: {}\tHEAD: {}\tSPEED: {}\tACCEL: ({},{})\n{}\t {}".format(mod,\
-               self.label,[x.label for x in self.on],self.heading,self.v,self.accel,self.turn_angle,\
+
+        print("{}{}\tON: {}\tHEAD: {}\tSPEED: {}\tACCEL: ({},{})\n{}\t {}".format(mod,\
+               self.label,[x.label for x in self.on],self.heading,self.v,self.accel,self.yaw_rate,\
                self.label,dims))
 
 
@@ -693,7 +756,7 @@ def sideOfLine(pt,line_strt,line_end):
 
 
 def angularToCartesianDisplacement(x_disp,y_disp,direction):
-    """Transl:ates a displacement in a specified direction into displacement along the
+    """Translates a displacement in a specified direction into displacement along the
        standard basis axes"""
     phi = math.sqrt(x_disp**2 + y_disp**2)
     delta = math.degrees(math.atan(x_disp/y_disp))

@@ -23,7 +23,7 @@ class GraphicWrapper(pygame.sprite.Sprite):
                 self.default_color = RED
         else:
             self.default_color = BLACK
-        
+ 
         if surface is None:
             self.surface = pygame.Surface((width,height))
             self.surface.fill(INVIS)

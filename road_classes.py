@@ -7,7 +7,7 @@ import math
 
 #Width of a standard lane in the UK as found at
 # https://en.wikipedia.org/wiki/Lane#Lane_width  . Unites are metres
-lane_width = 3.7
+lane_width = 6#3.7
 
 class Junction():
     """In the symbolic network the Junctions play a crucial role as the nodes of the 
@@ -261,7 +261,7 @@ class Lane():
 
 
     def twinLanes(self,lane):
-        """The parameter 'lane' is a reference to the other lane on the same 
+        """The parameter 'lane' is a reference to the other lane on the same
            road as the ego-lane. This function provides each with a reference to the
            other for convenience in-program"""
         if self.is_top_up: #One lane can update both.
@@ -270,10 +270,12 @@ class Lane():
 
 
     def putOn(self,obj):
-        """Add the specified object to the list of objects on the lane. 
+        """Add the specified object to the list of objects on the lane.
            Also add it onto the road if it is not already there"""
         if obj not in self.on:
             self.on.append(obj)
+        if self not in obj.on:
+            obj.putOn(self)
         if obj not in self.road.on:
             self.road.putOn(obj)
 

@@ -1,19 +1,21 @@
+# -*- coding: utf-8 -*-
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import pygame
 import random
 import sys
 
 sys.path.insert(0,"../responsibility_experiments")
-import rnr_exp1 as rnr
+import risk_and_responsibility_tools as rnr
 
 class StandardDrivingController():
-    def __init__(self,ego=None,accel_range=[-5,5],accel_jerk=1,angle_range=[0,0],angle_jerk=5,speed_limit=5,speed_limit_buffer=5,**kwargs):
+    def __init__(self,ego=None,accel_range=[-5,5],accel_jerk=1,yaw_rate_range=[0,0],yaw_rate_jerk=5,speed_limit=5,speed_limit_buffer=5,**kwargs):
         self.speed_limit = speed_limit
         self.speed_limit_buffer = speed_limit_buffer
 
         self.accel_range = accel_range
-        self.angle_range = angle_range
+        self.yaw_rate_range = yaw_rate_range
 
         self.ego = ego
 
@@ -22,7 +24,7 @@ class StandardDrivingController():
         self.down_coef = .5
 
         self.accel_jerk = accel_jerk
-        self.angle_jerk = angle_jerk
+        self.yaw_rate_jerk = yaw_rate_jerk
 
 
     def setup(self,ego=None,**kwargs):
@@ -50,16 +52,16 @@ class StandardDrivingController():
 
 
     def getAngleRange(self,state):
-        angle_range = list(self.angle_range)
-        prev_turn_angle = state["turn_angle"]
+        yaw_rate_range = list(self.yaw_rate_range)
+        prev_yaw_rate = state["yaw_rate"]
 
-        angle_range = [max(angle_range[0],prev_turn_angle-self.angle_jerk),min(angle_range[1],prev_turn_angle+self.angle_jerk)]
-        return angle_range
+        yaw_rate_range = [max(yaw_rate_range[0],prev_yaw_rate-self.yaw_rate_jerk),min(yaw_rate_range[1],prev_yaw_rate+self.yaw_rate_jerk)]
+        return yaw_rate_range
 
 
-    def selectAction(self,state,lim_accel_range,lim_angle_range):
+    def selectAction(self,state,lim_accel_range,lim_yaw_rate_range):
         accel_range = list(self.accel_range)
-        angle_range = list(self.angle_range)
+        yaw_rate_range = list(self.yaw_rate_range)
 
         ego_vel = state["velocity"]
 
@@ -97,21 +99,21 @@ class StandardDrivingController():
         if lim_accel_range[1] is not None and lim_accel_range[1]<accel_range[1]: accel_range[1] = lim_accel_range[1]
         accel = np.random.uniform(accel_range[0],accel_range[1])
 
-        angle_range = self.getAngleRange(state)
-        if lim_angle_range[0] is not None and lim_angle_range[0]>angle_range[0]: angle_range[0] = lim_angle_range[0]
-        if lim_accel_range[1] is not None and lim_angle_range[1]<angle_range[1]: angle_range[1] = lim_angle_range[1]
-        angle = np.random.uniform(angle_range[0],angle_range[1])
+        yaw_rate_range = self.getAngleRange(state)
+        if lim_yaw_rate_range[0] is not None and lim_yaw_rate_range[0]>yaw_rate_range[0]: yaw_rate_range[0] = lim_yaw_rate_range[0]
+        if lim_accel_range[1] is not None and lim_yaw_rate_range[1]<yaw_rate_range[1]: yaw_rate_range[1] = lim_yaw_rate_range[1]
+        yaw_rate = np.random.uniform(yaw_rate_range[0],yaw_rate_range[1])
 
-        return accel,angle
+        return accel,yaw_rate
 
 
 class TrajectoryController():
-    def __init__(self,ego=None,traj_func=None,accel_range=None,angle_range=None,auto_start_traj=True,start_coef=1,**kwargs):
+    def __init__(self,ego=None,traj_func=None,accel_range=None,yaw_rate_range=None,auto_start_traj=True,start_coef=1,**kwargs):
         self.ego = ego
         self.accel_range = accel_range
 
         self.traj_generator = traj_func
-        kwargs.update({"ego":ego,"accel_range":accel_range,"angle_range":angle_range})
+        kwargs.update({"ego":ego,"accel_range":accel_range,"yaw_rate_range":yaw_rate_range})
         self.generator_params = kwargs
 
         self.auto_start_trajectory = auto_start_traj
@@ -139,7 +141,7 @@ class TrajectoryController():
             self.index = 0
 
 
-    def selectAction(self,state,lim_accel_range,lim_angle_range):
+    def selectAction(self,state,lim_accel_range,lim_yaw_rate_range):
         if self.trajectory is None:
             #It is a bit hacky to have this here, but generating trajectories whenever
             # vehicle was reset created lots of problems (i.e. short track => infinite loop
@@ -154,25 +156,25 @@ class TrajectoryController():
 
         if self.index == -1:
             if random.random()<self.start_coef: self.index = 0
-            else: accel,angle_accel = self.backup_controller.selectAction(state,lim_accel_range,lim_angle_range)
+            else: accel,yaw_rate = self.backup_controller.selectAction(state,lim_accel_range,lim_yaw_rate_range)
 
         if self.index != -1:
             if self.index<len(self.trajectory):
-                accel,angle_accel = self.trajectory[self.index][1],0
+                accel,yaw_rate = self.trajectory[self.index][1]
             else:
                 if self.index == len(self.trajectory):
                     self.backup_controller.setup()
-                accel,angle_accel = self.backup_controller.selectAction(state,lim_accel_range,lim_angle_range)
+                accel,yaw_rate = self.backup_controller.selectAction(state,lim_accel_range,lim_yaw_rate_range)
             self.index += 1
-        return accel,angle_accel
+        return accel,yaw_rate
 
 
 class FollowController():
     """Basic ACC controller taken from the method depicted in 'Stop and Go Cruise Control'"""
     # Values used in First Year Review; speed_limit=22.22, damping=95.8, stiff=1.88
-    # Values used for experiments without basis in literature: speed_limit=22.22, damping=.275, stiff=.32
-    #def __init__(self,time_headway=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=5,**kwargs):
-    def __init__(self,time_headway=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=5,safe_dist_bounds=None,**kwargs):
+    # Values used for experiments without basis in literature; speed_limit=22.22, damping=.275, stiff=.32
+    #def __init__(self,time_headway=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],yaw_rate_range=[0,0],speed_limit=5,**kwargs):
+    def __init__(self,time_headway=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],yaw_rate_range=[0,0],speed_limit=5,safe_dist_bounds=None,**kwargs):
         self.jerk = accel_jerk #Value of jerk does not affect acceleration chosen somehow
         self.speed_limit = speed_limit
         self.timestep = timestep
@@ -190,7 +192,7 @@ class FollowController():
         self.k_d = stiff
 
         self.accel_range = accel_range
-        self.angle_range = angle_range
+        self.yaw_rate_range = yaw_rate_range
 
 
     def simulateController(self,sim):
@@ -276,7 +278,7 @@ class FollowController():
 
 
 class DataGeneratorController():
-    def __init__(self,time_range=[1,10],ego=None,other=None,accel_range=[-5,5],accel_jerk=1,angle_range=[0,0],speed_limit=0,speed_limit_buffer=0,**kwargs):
+    def __init__(self,time_range=[1,10],ego=None,other=None,accel_range=[-5,5],accel_jerk=1,yaw_rate_range=[0,0],speed_limit=0,speed_limit_buffer=0,**kwargs):
         self.fast_controller = GoFastController(speed_limit=speed_limit+speed_limit_buffer,accel_range=accel_range,accel_jerk=accel_jerk,ego=ego,**kwargs)
         self.slow_controller = GoSlowController(speed_limit=speed_limit+speed_limit_buffer,accel_range=accel_range,accel_jerk=accel_jerk,ego=ego,**kwargs)
 
@@ -286,7 +288,7 @@ class DataGeneratorController():
         self.other = other
 
         self.accel_range = accel_range
-        self.angle_range = angle_range
+        self.yaw_rate_range = yaw_rate_range
 
         self.timestep = None
 
@@ -327,7 +329,7 @@ class DataGeneratorController():
         self.slow_controller.setup(ego=ego,other=other)
 
 
-    def selectAction(self,state,lim_accel_range,lim_angle_range):
+    def selectAction(self,state,lim_accel_range,lim_yaw_rate_range):
         if self.controller is None:
             if state["velocity"]>self.speed_limit/2:
                 self.controller = self.slow_controller
@@ -354,13 +356,13 @@ class DataGeneratorController():
                 self.controller = self.slow_controller
         self.time -= self.timestep
 
-        return self.controller.selectAction(state,lim_accel_range,lim_angle_range)
+        return self.controller.selectAction(state,lim_accel_range,lim_yaw_rate_range)
 
 
 class OvertakeController():
-    def __init__(self,ego=None,other=None,accel_range=[-5,5],angle_range=[0,0],speed_limit=0,speed_limit_buffer=0,**kwargs):
+    def __init__(self,ego=None,other=None,accel_range=[-5,5],yaw_rate_range=[0,0],speed_limit=0,speed_limit_buffer=0,**kwargs):
         self.accel_range = accel_range
-        self.angle_range = angle_range
+        self.yaw_rate_range = yaw_rate_range
 
         self.ego = ego
         self.other = other
@@ -376,9 +378,9 @@ class OvertakeController():
             self.other = other
 
 
-    def selectAction(self,state,lim_accel_range,lim_angle_range):
+    def selectAction(self,state,lim_accel_range,lim_yaw_rate_range):
         accel_range = list(self.accel_range)
-        angle_range = list(self.angle_range)
+        yaw_rate_range = list(self.yaw_rate_range)
         del_v = state["del_v"]
         if del_v>0 or self.other.y_com-self.other.length/2<self.ego.y_com: #Need positive accel
             accel_range = [max(0,accel_range[0]),accel_range[1]]
@@ -426,18 +428,6 @@ class GoFastController():
         return accel,0
 
 
-#    def selectAction(self,state,lim_accel_range,*args):
-#        #prev_accel = state["acceleration"]
-#        if state["velocity"]+self.ego.timestep*self.accel>self.speed_limit:
-#            accel = 0
-#        else:
-#            if lim_accel_range[1] is not None and lim_accel_range[1]<self.accel:
-#                accel = lim_accel_range[1]
-#            else:
-#                accel = self.accel
-#        return accel,0
-#
-
 class GoSlowController():
     def __init__(self,accel_range=[-5,5],accel_jerk=10,ego=None,**kwargs):
         self.accel = None
@@ -467,33 +457,117 @@ class GoSlowController():
         return accel,0
 
 
-#    def selectAction(self,state,lim_accel_range,*args):
-#        if state["velocity"]+self.ego.timestep*self.accel<0:
-#            accel = 0
-#        else:
-#            if lim_accel_range[0] is not None and lim_accel_range[0]>self.accel:
-#                accel = lim_accel_range[0]
-#            else:
-#                accel = self.accel
-#        return accel,0
-
-
 class RandomController():
-    def __init__(self,speed_limit=0,speed_limit_buffer=0,accel_range=[-5,5],angle_range=[0,0],**kwargs):
+    def __init__(self,speed_limit=0,speed_limit_buffer=0,accel_range=[-5,5],yaw_rate_range=[0,0],**kwargs):
         self.accel_range = accel_range
-        self.angle_range = angle_range
+        self.yaw_rate_range = yaw_rate_range
 
 
-    def selectAction(self,state,lim_accel_range,lim_angle_range):
+    def setup(self,**kwargs):
+        pass
+
+
+    def selectAction(self,state,lim_accel_range,lim_yaw_rate_range):
         accel_range = list(self.accel_range)
-        angle_range = list(self.angle_range)
+        yaw_rate_range = list(self.yaw_rate_range)
 
         if lim_accel_range[0] is not None and lim_accel_range[0]>accel_range[0]: accel_range[0] = lim_accel_range[0]
         if lim_accel_range[1] is not None and lim_accel_range[1]<accel_range[1]: accel_range[1] = lim_accel_range[1]
 
-        if lim_angle_range[0] is not None and lim_angle_range[0]>angle_range[0]: angle_range[0] = lim_angle_range[0]
-        if lim_accel_range[1] is not None and lim_angle_range[1]<angle_range[1]: angle_range[1] = lim_angle_range[1]
+        if lim_yaw_rate_range[0] is not None and lim_yaw_rate_range[0]>yaw_rate_range[0]: yaw_rate_range[0] = lim_yaw_rate_range[0]
+        if lim_accel_range[1] is not None and lim_yaw_rate_range[1]<yaw_rate_range[1]: yaw_rate_range[1] = lim_yaw_rate_range[1]
 
         accel = np.random.uniform(accel_range[0],accel_range[1])
-        angle = np.random.uniform(angle_range[0],angle_range[1])
-        return accel,angle
+        yaw_rate = np.random.uniform(yaw_rate_range[0],yaw_rate_range[1])
+        return accel,yaw_rate
+
+
+class UnbiasedRandomController():
+    """Random controller that samples actions in such a way that the expected value of the magnitudes of the acceleration and yaw rate is 0
+       i.e. if the magnitude of the lower bound of the range is greater than the magnitude of the upper bound (and they have opposite sign)
+       then we increase the probability of sampling a value greater than 0 to capture this."""
+    def __init__(self,speed_limit=0,speed_limit_buffer=0,accel_range=[-5,5],yaw_rate_range=[0,0],**kwargs):
+        self.accel_range = accel_range
+        self.yaw_rate_range = yaw_rate_range
+
+
+    def setup(self,**kwargs):
+        pass
+
+
+    def selectAction(self,state,lim_accel_range,lim_yaw_rate_range):
+        accel_range = list(self.accel_range)
+        yaw_rate_range = list(self.yaw_rate_range)
+
+        if lim_accel_range[0] is not None and lim_accel_range[0]>accel_range[0]: accel_range[0] = lim_accel_range[0]
+        if lim_accel_range[1] is not None and lim_accel_range[1]<accel_range[1]: accel_range[1] = lim_accel_range[1]
+
+        if lim_yaw_rate_range[0] is not None and lim_yaw_rate_range[0]>yaw_rate_range[0]: yaw_rate_range[0] = lim_yaw_rate_range[0]
+        if lim_accel_range[1] is not None and lim_yaw_rate_range[1]<yaw_rate_range[1]: yaw_rate_range[1] = lim_yaw_rate_range[1]
+
+        if accel_range[0]!=0 and accel_range[1]/accel_range[0] <0: #range contains both positive and negative values
+            if random.random()<abs(accel_range[0])/(abs(accel_range[1]-accel_range[0])):
+                accel = np.random.uniform(0,accel_range[1])
+            else:
+                accel = np.random.uniform(accel_range[0],0)
+        else:
+            accel = np.random.uniform(accel_range[0],accel_range[1])
+
+        if yaw_rate_range[0]!=0 and yaw_rate_range[1]/yaw_rate_range[0]<0:
+            if random.random()<abs(yaw_rate_range[0])/(abs(yaw_rate_range[1]-yaw_rate_range[0])):
+                yaw_rate = np.random.uniform(0,yaw_rate_range[1])
+            else:
+                yaw_rate = np.random.uniform(yaw_rate_range[0],0)
+        else:
+            yaw_rate = np.random.uniform(yaw_rate_range[0],yaw_rate_range[1])
+
+        return accel,yaw_rate
+
+
+class ManualController():
+    def __init__(self,accel_range=[-5,5],accel_jerk=.1,yaw_rate_range=[-30,30],yaw_rate_jerk=5,**kwargs):
+        self.accel_range = accel_range
+        self.accel_jerk = accel_jerk
+        self.yaw_rate_range = yaw_rate_range
+        self.yaw_rate_jerk = yaw_rate_jerk
+        print("Manual Controller Initialised")
+
+
+    def setup(self,**kwargs):
+        pass
+
+
+    def selectAction(self,state,*args):
+        accel,yaw_rate = state["acceleration"],state["yaw_rate"]
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT]:
+            print("Left Key Pressed, increasing yaw_rate")
+            yaw_rate = min(self.yaw_rate_range[1],yaw_rate+self.yaw_rate_jerk)
+        if keys[pygame.K_RIGHT]:
+            print("Right Key Pressed, decreasing yaw_rate")
+            yaw_rate = max(self.yaw_rate_range[0],yaw_rate-self.yaw_rate_jerk)
+        if keys[pygame.K_UP]:
+            print("Up key pressed, increasing Acceleration")
+            accel = min(self.accel_range[1],accel+self.accel_jerk)
+        if keys[pygame.K_DOWN]:
+            print("Down Key pressed, decreasing Acceleration")
+            accel = max(self.accel_range[0],accel-self.accel_jerk)
+
+        print("Action: Accel: {}\tYaw: {}".format(accel,yaw_rate))
+        return accel,yaw_rate
+
+
+class ConstantVelocityController():
+    def __init__(self,**kwargs):
+        self.accel_range = [0,0]
+        self.accel_jerk = 0
+        self.yaw_rate_range = [0,0]
+        self.yaw_rate_jerk = 0
+
+
+    def setup(self,**kwargs):
+        pass
+
+
+    def selectAction(self,*args):
+        return 0,0
