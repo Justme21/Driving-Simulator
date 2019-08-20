@@ -3,10 +3,13 @@ import road_classes
 import vehicle_classes
 
 BLACK = (0,0,0)
+WHITE = (255,255,255)
 RED = (255,0,0)
 GREEN = (0,255,0)
 BLUE = (0,0,255)
 DARK_BLUE = (0,0,128)
+
+DOWN_SCALE = .98
 
 class GraphicWrapper(pygame.sprite.Sprite):
     def __init__(self,obj,unit=1):
@@ -23,8 +26,16 @@ class GraphicWrapper(pygame.sprite.Sprite):
             self.image = pygame.transform.scale(self.image,(int(obj.length*unit),int(obj.width*unit)))
             centre_point = (self.obj.x_com,self.obj.y_com)
         else:
-            self.image = pygame.Surface((int(obj.length*unit),int(obj.width*unit))) #this is widthxlength. By default these shapes begin facing 0 degrees, which is to screen right. So it is l wide and w high ("long")
-            self.image.fill(BLACK)
+            if isinstance(self.obj,road_classes.Lane):
+                self.image = pygame.Surface((int(obj.length*unit),int(obj.width*unit*DOWN_SCALE)))
+            else:
+                self.image = pygame.Surface((int(obj.length*unit),int(obj.width*unit))) #this is widthxlength. By default these shapes begin facing 0 degrees, which is to screen right. So it is l wide and w high ("long")
+
+            if isinstance(self.obj,road_classes.Road):
+                self.image.fill(WHITE)
+            else:
+                self.image.fill(BLACK)
+
             self.image = pygame.transform.rotate(self.image,obj.direction)
             corners = list(self.obj.four_corners.values())
             centre_point = (sum([x[0] for x in corners])/len(corners),sum([x[1] for x in corners])/len(corners))

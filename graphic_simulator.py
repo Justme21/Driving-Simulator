@@ -1,7 +1,11 @@
 from graphic_classes import GraphicWrapper
 import pygame
 
+from  datetime import datetime as dt
+import time
+
 WHITE = (255,255,255)
+GREEN = (0,255,0)
 
 INVIS = (255,0,255)
 
@@ -46,7 +50,8 @@ class GraphicSimulator():
         #White is a generic background colour
         self.background.set_colorkey(INVIS)
         self.screen.set_colorkey(INVIS)
-        self.background.fill(WHITE)
+        #self.background.fill(WHITE)
+        self.background.fill(GREEN)
 
 
     def update(self):
@@ -82,8 +87,7 @@ class GraphicSimulator():
 
 
     def shutdown(self):
-        """Store the final image from the simulation and then shut down the pygame instance"""
-        pygame.image.save(self.screen,"screenshot.jpeg")
+        """Shut down the pygame instance"""
         pygame.quit()
         self.is_quit = True
 
@@ -96,14 +100,45 @@ class GraphicSimulator():
                 pygame.quit()
                 self.is_quit = True
 
-
     def drawScene(self):
-        """Used for inspecting static moments without progressing in the simulation.
-           Repeatedly draws the current state of the simulation until a keyboard key is pressed"""
-        acts = [x.type for x in pygame.event.get()]
-        while pygame.KEYDOWN not in acts and pygame.QUIT not in acts:
+        """Used to get initial state of simulation"""
+        #This is easier than trying to pause it at just the right moment
+        print("Simulation is Paused")
+        while not pygame.key.get_pressed()[pygame.K_SPACE]:
             self.update()
-            acts = [x.type for x in pygame.event.get()]
+            self.checkForSnapshot()
+        print("Resuming Simulation")
+
+
+    def checkForPause(self):
+        is_pressed = pygame.key.get_pressed()[pygame.K_SPACE]
+        if is_pressed:
+            self.pauseSimulation()
+
+
+    def pauseSimulation(self):
+        print("Simulation is Paused")
+        is_pressed = False
+        pygame.time.wait(1000)
+        while not is_pressed:
+            self.update()
+            self.checkForSnapshot()
+            is_pressed = pygame.key.get_pressed()[pygame.K_SPACE]
+
+        print("Resuming Simulation")
+
+
+    def checkForSnapshot(self):
+        if pygame.key.get_pressed()[pygame.K_RETURN]:
+            now = dt.now()
+            snapshot_name = "screenshot-{}.jpeg".format(now.strftime("%d-%m-%y_%H-%M-%S"))
+            pygame.image.save(self.screen,snapshot_name)
+            print("GS: Snapshot {} of simulator has been taken".format(snapshot_name))
+
+
+    def endStep(self):
+        self.checkForPause()
+        self.checkForSnapshot()
 
 
 def drawTrajectory(coords,unit,screen):

@@ -54,7 +54,7 @@ class Simulator():
         """If graphics are being used then initialises the graphical simulator and draws the current scene"""
         if self.g_sim is None:
             self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj)
-        self.g_sim.drawScene()
+        self.g_sim.pauseSimulation()
 
 
     def initialiseSimulator(self,num_junctions,num_roads,road_angles,road_lengths,junc_pairs,init_speeds,starts,dests,lane_width=None):
@@ -152,6 +152,9 @@ class Simulator():
         """Prints debug output at end of each timestep, mainly for debugging purposes"""
         for car in self.cars:
             car.endStep()
+
+        if self.graphic:
+            self.g_sim.endStep()
 
         if self.debug:
             for car in self.cars:
