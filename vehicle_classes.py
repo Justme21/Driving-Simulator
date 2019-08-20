@@ -6,13 +6,13 @@ import trajectory_builder
 
 #Values corresponding to a Volvo S60 (values found at https://www.auto123.com/en/new-cars/technical-specs/volvo/s60/2018/base/t5-base-awd/#dimensions)
 #Same vehicle used in "model-based threat assessment for avoiding arbitrary vehicle collisions"-Br\{"}annstr\{"}om
-car_length = 4.635
-car_width = 2.097
+CAR_LENGTH = 4.635
+CAR_WIDTH = 2.097
 
 #Alternative values could be length=5m, width=2 as per "model-based threat assessment for avoiding arbitrary vehicle collisions"-Br\{"}annstr\{"}om
 
 class Car():
-    def __init__(self,controller=None,is_ego=False,label="DEFAULT_LABEL",debug=False,is_demo=True,is_interactive=True,timestep=.1):
+    def __init__(self,controller=None,is_ego=False,label="DEFAULT_LABEL",debug=False,is_demo=True,is_interactive=True,timestep=.1,car_params={}):
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -35,14 +35,21 @@ class Car():
         self.is_ego = is_ego
 
         #Dimensions of the car
-        self.length = car_length
-        self.width = car_width
+        if "length" in car_params and car_params["length"]>0: self.length = car_params["length"]
+        else: self.length = CAR_LENGTH
+
+        if "width" in car_params and car_params["width"]>0: self.width = car_params["width"]
+        else: self.width = CAR_WIDTH
 
 
         #Kinematic Bicycle model (The Kinematic Bicycle Model: a Consistent Model for Planning Feasible Trajectories for Autonomous Vehicles?)
         #Philip Polack, Florent Altché, Brigitte D’Andréa-Novel, Arnaud De La Fortelle
-        self.Lr = 1.61 #Distance from COM to rear axle
-        self.Lf = 1.11 #Distance from COM to front axle
+        if "com_to_axle" in car_params and (max(car_params["com_to_axle"])>0):
+            self.Lr = car_params["com_to_axle"][0]
+            self.Lf = car_params["com_to_axle"][1]
+        else:
+            self.Lr = 1.61 #Distance from COM to rear axle
+            self.Lf = 1.11 #Distance from COM to front axle
         #The remaining two parameters are included in the referenced paper, but are we do not use
         #These would be used in the Dynamic Bicycle model
         #self.L0 = 4 #Distance from front of car to rear axle
@@ -84,11 +91,12 @@ class Car():
         self.priv_state = None
 
         self.controller = controller
+        if self.controller is not None: self.controller.setup(ego=self)
         #Keeps track of permissible controllers for a vehicle
         self.controllers = {"default": controller}
         #Initialise time. Used to record how long it takes to achieve an objective
         self.time = 0
-        self.initialisation_params = []
+        self.initialisation_params = {}
 
 
     #property tag means this function can be called as an attribute (veh.state will be the state
@@ -119,10 +127,10 @@ class Car():
                 dup.controller = dup.controllers[controller]
         if self.debug:
             print("Finished loading controllers from {} to {}".format(self.label,dup.label))
-        if self.initialisation_params != []:
+        if self.initialisation_params != {}:
             #If this car has already been initialised then copy should also be initialsed
             #This means if we reset this vehicle it will reset to the same place as the original  
-            dup.initSetup(*self.initialisation_params)
+            dup.initSetup(**self.initialisation_params)
 
             #Set the current state of the duplicate to match the original
             dup.setMotionParams((self.x_com,self.y_com),self.heading,self.v)
@@ -185,12 +193,13 @@ class Car():
             obj.takeOff(self)
 
 
-    def initSetup(self,road_lane,dest,v,accel=0,yaw_rate=0,prev_disp_x=None,prev_disp_y=None):
+    def initSetup(self,road_lane,dest,v,heading=None,accel=0,yaw_rate=0,prev_disp_x=None,prev_disp_y=None):
         """Performing initial setup of the car. Input is reference to lane that the
            vehicle is generated on."""
         self.on = []
         lane = None
         road = road_lane[0]
+        #self.putOn(road) #controversial. Originally road was only a wrapper for lanes, but tentatively changing this
         is_top_lane = bool(road_lane[1])
         if is_top_lane:
             self.putOn(road.top_up_lane)
@@ -199,13 +208,15 @@ class Car():
             self.putOn(road.bottom_down_lane)
             lane = road.bottom_down_lane
 
+        #For simplicity we assume the car starts at the centre of the road, heading
+        # parallel to the course of the road (unless heading specified) (heading only specified for copies)
+        if heading is None:
+            heading = lane.direction
+        self.heading = heading
+
         self.on_road = True #on_road is false if we run off the road
         self.crashed = False
         self.is_complete = False
-
-        #For simplicity we assume the car starts at the centre of the road, heading
-        # parallel to the course of the road
-        self.heading = lane.direction
 
         if prev_disp_x is None:
             x_disp = round(lane.width/2,2)
@@ -216,8 +227,8 @@ class Car():
             y_disp = round((self.length/2)+ random.random()*(lane.length-self.length),2)
         else:
             y_disp = prev_disp_y
-        direction = self.heading
-        disp = angularToCartesianDisplacement(x_disp,y_disp,direction)
+
+        disp = angularToCartesianDisplacement(x_disp,y_disp,heading)
 
         lane_coords = lane.four_corners["front_left"]
         lane_x = lane_coords[0]
@@ -229,7 +240,7 @@ class Car():
         if self.debug:
             print("TEST BEGIN")
             print("LANE: ({},{})\tDIREC: {}\tCAR: ({},{})\tDISP: ({},{}))".format(\
-                   lane_x,lane_y,direction,self.x_com,self.y_com,disp[0],disp[1]))
+                   lane_x,lane_y,heading,self.x_com,self.y_com,disp[0],disp[1]))
             print("TEST END")
 
         #The coordinates of each corner of the car
@@ -254,13 +265,13 @@ class Car():
 
         self.sense()
 
-        self.initialisation_params = [road_lane,dest,v,accel,yaw_rate,x_disp,y_disp]
+        self.initialisation_params = {"road_lane":road_lane,"dest":dest,"v":v,"heading":heading,"accel":accel,"yaw_rate":yaw_rate,"prev_disp_x":x_disp,"prev_disp_y":y_disp}
 
 
     def reinitialise(self):
         params = self.initialisation_params
         self.time = 0
-        self.initSetup(*params)
+        self.initSetup(**params)
         self.controller.reset()
 
 
@@ -299,12 +310,12 @@ class Car():
         if posit is not None:
             self.x_com = posit[0]
             self.y_com = posit[1]
-            self.setFourCorners()
         if heading is not None:
             self.heading = heading
         if vel is not None:
             self.v = vel
 
+        self.setFourCorners()
         self.sense() #This is sense as the change in position might have caused a collision
 
 
@@ -394,6 +405,17 @@ class Car():
         self.updatePublicState()
 
 
+    def rollout(self,action_sequence):
+        """Roll out a sequence of actions (acceleration,yaw_rate pairs). The vehicle ends up
+           where it would be at the end of the trajectory without interacting with the environment
+           in the interim (i.e. passes through cars and crosses lanes etc.)"""
+        for (lin_accel,yaw_rate) in action_sequence:
+            self.setAction(lin_accel,yaw_rate)
+            self.move()
+
+        self.sense()
+
+
     def checkNewOn(self):
         """Check to see if self is now on any of the environment objects that it
            was not on in the previous round."""
@@ -434,6 +456,14 @@ class Car():
                 #onto opposite lane.
                 if obj.lane_twin not in self.on:
                     candidates.append(obj.lane_twin)
+
+                #I am uncertain about adding the road here as it should be redundant as either
+                # the car will be on one of the lanes, in which case it will be automatically
+                # put on the road, or else it shouldn't be on the road. But there is an occasinal
+                # issue where the car falls between the cracks due to how "checkOn" is defined.
+                # This should resolve.
+                if obj.road not in self.on:
+                    candidates.append(obj.road)
 
             if isinstance(obj,road_classes.Junction):
                 #If we are on a junction we only check to see if we are on a 
@@ -480,13 +510,37 @@ class Car():
     def evaluateCrash(self,obj):
         """Checks if the car has crashed into a specified object"""
         obj_coords = obj.four_corners
-        for entry in self.four_corners:
-            pt = self.four_corners[entry]
+        #If two cars overlap just right it can be such that the centres overlap, but the corners do not satisfy a crash
+        check_points = dict(self.four_corners)
+        check_points["centre"] = (self.x_com,self.y_com)
+        #print("Vehicle Classes: Evaluating Crash")
+        for entry in check_points:
+            pt = check_points[entry]
+        #    print("Vehicle Classes: Evaluating Crash-{}".format(entry))
+        #    print("{} at {}, Four Corners of vehicle at: {}".format(entry,pt,check_points))
+        #    print("Front Overlap: {}\tBack Overlap: {}\nLeft Overlap: {}\tRight Overlap: {}".format(\
+        #            sideOfLine(pt,obj_coords["front_left"],obj_coords["front_right"]),\
+        #            sideOfLine(pt,obj_coords["back_left"],obj_coords["back_right"]),\
+        #            sideOfLine(pt,obj_coords["front_left"],obj_coords["back_left"]),\
+        #            sideOfLine(pt,obj_coords["front_right"],obj_coords["back_right"])))
+        #    print("Vehicle Classes: Done with Evaluation")
             if sideOfLine(pt,obj_coords["front_left"],obj_coords["front_right"])!=\
-               sideOfLine(pt,obj_coords["back_left"],obj_coords["back_right"]) and\
-               sideOfLine(pt,obj_coords["front_left"],obj_coords["back_left"])!=\
-               sideOfLine(pt,obj_coords["front_right"],obj_coords["back_right"]):
-                   return True
+                sideOfLine(pt,obj_coords["back_left"],obj_coords["back_right"]) and\
+                sideOfLine(pt,obj_coords["front_left"],obj_coords["back_left"])!=\
+                sideOfLine(pt,obj_coords["front_right"],obj_coords["back_right"]):
+
+                    if self.debug:
+                        print("\nVehicle_Classes")
+                        print("Crash at {} (obstacle at {})".format((self.x_com,self.y_com),(obj.x_com,obj.y_com)))
+                        print("Crash caused from: {} ({})".format(entry,self.four_corners[entry]))
+                        print("Front Overlap: {}\tBack Overlap: {}\nLeft Overlap: {}\tRight Overlap: {}".format(\
+                                sideOfLine(pt,obj_coords["front_left"],obj_coords["front_right"]),\
+                                sideOfLine(pt,obj_coords["back_left"],obj_coords["back_right"]),\
+                                sideOfLine(pt,obj_coords["front_left"],obj_coords["back_left"]),\
+                                sideOfLine(pt,obj_coords["front_right"],obj_coords["back_right"])))
+
+                        print("Self: {}\nOther: {}".format(self.four_corners,obj.four_corners))
+                    return True
 
         return False
 
@@ -547,7 +601,11 @@ class Car():
         #Checking if we have wandered off the map
         self.on_road = False
         for entry in self.on:
-            if isinstance(entry,road_classes.Lane) or isinstance(entry,road_classes.Junction):
+            #Originally did not include roads here. This is because originally roads were designed to be
+            #containers for lanes. However, due to the cyclical nature of checkOn, there is a bug
+            # wherein a car can fall between two lanes. It should not be able to fall through a road though
+            #if isinstance(entry,road_classes.Lane) or isinstance(entry,road_classes.Junction):
+            if isinstance(entry,road_classes.Road) or isinstance(entry,road_classes.Junction):
                 self.on_road = True
                 break
 
@@ -684,6 +742,13 @@ class Car():
         self.updatePrivateState()
 
 
+    def endStep(self):
+        """Called at the end of each timestep/iteration of the simulator. Allows for compiling
+           of information about what happened during the iteration"""
+        if self.controller is not None:
+            self.controller.endStep()
+
+
     def printStatus(self,mod=""):
         corner_labels = {"back_right":"br","back_left":"bl","front_right":"fr",\
                          "front_left":"fl"}
@@ -744,8 +809,8 @@ def sideOfLine(pt,line_strt,line_end):
        pt lies on."""
     #Slope here is infinite so side of the line comes down to the x-values
     if line_strt[0] == line_end[0]:
-        if pt[0]>line_strt[0]: return -1 #Right of line
-        elif pt[0]<line_strt[0]: return 1 #Left of line
+        if pt[0]>line_strt[0]: return 1 #Right of line
+        elif pt[0]<line_strt[0]: return -1 #Left of line
         else: return 0 #On line
     else:
         m = (line_strt[1]-line_end[1])/(line_strt[0]-line_end[0]) #Slope of line

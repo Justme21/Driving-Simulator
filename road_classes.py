@@ -7,22 +7,24 @@ import math
 
 #Width of a standard lane in the UK as found at
 # https://en.wikipedia.org/wiki/Lane#Lane_width  . Unites are metres
-lane_width = 6#3.7
+LANE_WIDTH = 3.7
 
 class Junction():
-    """In the symbolic network the Junctions play a crucial role as the nodes of the 
+    """In the symbolic network the Junctions play a crucial role as the nodes of the
        graph holding the network together.
        The junctions are used to anchor the symbolic graph to a real-cartesian map.
        Juntions provide an avenue to get from one road to another.
        By design Junctions always have horizontal and vertical boundaries, though the
        lengths of the sides depends on the roads attached"""
-    def __init__(self,label):
+    def __init__(self,label,lane_width=None):
         self.in_lanes = [] #lanes leading into the junction. Might not be necessary.
         self.out_lanes = [] #lanes leading out of junction. Used to choose exit once in.
 
         #Junction dimensions get re-defined in map_builder.set_dimensions.
         # We use generic values on initialisation so that the junction will have
         # some dimension even if no lanes enter on that side
+        if lane_width is None:
+            lane_width = LANE_WIDTH
         self.width = 2*lane_width
         self.length = 2*lane_width
 
@@ -112,12 +114,15 @@ class Junction():
 class Road():
     """Roads serve little function beyond encapsulating lanes - providing common
        direction and facilitating the construction of lanes in pairs."""
-    def __init__(self,length,angle,label):
+    def __init__(self,length,angle,label,lane_width=None):
+        if lane_width is None:
+            lane_width = LANE_WIDTH
+
         #Top and Bottom when imagining road running from left to right.
         # Up/Down lanes are left to right rotated 90 degrees anti-clockwise (Top==Up)
         if angle>90 and angle <=270: angle = (180+angle)%360 #Ensures top lane is always going right/up
-        self.top_up_lane = Lane(angle,length,label,self,1)
-        self.bottom_down_lane = Lane((180+angle)%360,length,label,self,0)
+        self.top_up_lane = Lane(angle,length,lane_width,label,self,1)
+        self.bottom_down_lane = Lane((180+angle)%360,length,lane_width,label,self,0)
 
         #We twin the lanes so that we can easily get from the top lane to the bottom
         # in program without having to go through the road.
@@ -224,13 +229,13 @@ class Road():
 
 
 class Lane():
-    def __init__(self,direction,length,label,road,is_top_up):
+    def __init__(self,direction,length,width,label,road,is_top_up):
         #The direction the lane is going relative to 0 degrees (horizontal).
         self.direction = direction
 
         #Fairly self-explanatory.
         self.length = length
-        self.width = lane_width
+        self.width = width
 
         #From and to based on left (top on horizontal road) lane of road.
         self.from_junction = None

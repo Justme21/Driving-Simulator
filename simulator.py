@@ -53,11 +53,11 @@ class Simulator():
     def drawSimulation(self):
         """If graphics are being used then initialises the graphical simulator and draws the current scene"""
         if self.g_sim is None:
-            self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars,self.traj)
+            self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj)
         self.g_sim.drawScene()
 
 
-    def initialiseSimulator(self,num_junctions,num_roads,road_angles,road_lengths,junc_pairs,init_speeds,starts,dests):
+    def initialiseSimulator(self,num_junctions,num_roads,road_angles,road_lengths,junc_pairs,init_speeds,starts,dests,lane_width=None):
         """Given the relevant objects initialises the simulator and loads cars in.
            num_junctions: [int] the number of junctions used in the simulation
            num_roads: [int] the number of roads used in the simulation
@@ -71,10 +71,10 @@ class Simulator():
                    the list also contains a binary integer indicating whether the car is targeting the second junction in the tuple."""
         if self.cars != []:
             self.junctions,self.roads,self.cars = constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,\
-                                                    junc_pairs,self.cars,init_speeds,starts,dests)
+                                                    lane_width,junc_pairs,self.cars,init_speeds,starts,dests)
 
             if self.graphic:
-                self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars,self.traj)
+                self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj)
             self.runSensing() #Sensing happens at the end of each timestep, so initial round of sensing must occur
             if self.debug:
                 print("Initialisation Complete")
@@ -102,7 +102,7 @@ class Simulator():
         if self.graphic != graphic:
             self.graphic = graphic
             if self.graphic:
-                self.g_sim = graphic_simulator.GraphicSimulator(self.junctions,self.roads,self.cars,self.traj)
+                self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj)
 
 
     def singleStep(self,car_list = None,move_dict=None,index=None):
@@ -150,6 +150,9 @@ class Simulator():
 
     def endStep(self):
         """Prints debug output at end of each timestep, mainly for debugging purposes"""
+        for car in self.cars:
+            car.endStep()
+
         if self.debug:
             for car in self.cars:
                 print("\nEnd Of Round Status Update:")
@@ -224,12 +227,12 @@ def putCarsOnMap(cars,road_dict,start=None,dest_list=None,car_speeds=None):
     # will give itself a random location on the specified lane with the same heading as
     # the lane.
     for i,car in enumerate(cars):
-        car.initSetup((road_dict[start[i][0]],start[i][1]),(road_dict[dest_list[i][0]],dest_list[i][1]),car_speeds[i])
+        car.initSetup(road_lane=(road_dict[start[i][0]],start[i][1]),dest=(road_dict[dest_list[i][0]],dest_list[i][1]),v=car_speeds[i])
     return cars
 
 
-def constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,\
-                         cars,car_speeds,start,destinations):
+def constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,lane_width,\
+                           junc_pairs,cars,car_speeds,start,destinations):
     """Given the attributes for the environment builds an approprite map and populates it with cars.
        num_junctions: [int] the number of junctions in the simulation
        num_roads: [int] the number of roads in the simulation
@@ -241,9 +244,10 @@ def constructEnvironment(num_junctions,num_roads,road_angles,road_lengths,junc_p
        start: [list] list of tuples where each tuple is a junc_pair identifying the road the vehicle should start on.
               the list also contains a binary integer indicating whether the car should be on the left lane of the road.
        dests: [list] list of tuples where each tuple is a junc_pair identifying the junction the vehicle should aim to end on.
-              the list also contains a binary integer indicating whether the car is targeting the second junction in the tuples"""
+              the list also contains a binary integer indicating whether the car is targeting the second junction in the tuples
+        lane_width: [float] the width of a single lane in metres (where standard roads have 2 lanes)"""
     junctions,road_dict = map_builder.buildMap(num_junctions,num_roads,road_angles,\
-                                           road_lengths,junc_pairs)
+                                           road_lengths,junc_pairs,lane_width=lane_width)
 
     cars = putCarsOnMap(cars,road_dict,start,destinations,car_speeds)
     roads = list(road_dict.values())
@@ -255,6 +259,7 @@ def canGo(cars):
     can_go = False
     for car in cars:
         if car.crashed or not car.on_road:
+            print("Simulator Message: Cars have crashed. Ending Simulation")
             return False #If a car has crashed the simulation should stop
         if not car.is_complete: can_go = True
     return can_go
@@ -270,7 +275,7 @@ def initialiseControlledCars(num_cars,controllers,accel_range,yaw_rate_range,deb
        yaw_rate_range: [list] list inidicating the lower and upper range for the angular acceleration
        debug: [bool] indicates whether or not debug print statements should be printed"""
     cars = []
-    controllers += [lcc.RandomController(accel_range,yaw_rate_range) for _ in range(num_cars-len(controllers))]
+    controllers += [lcc.DrivingController(controller="random",accel_range=accel_range,yaw_rate_range=yaw_rate_range) for _ in range(num_cars-len(controllers))]
     is_ego = True
     for i in range(num_cars):
         cars.append(vehicle_classes.Car(controllers[i],is_ego,i,debug))
@@ -312,25 +317,27 @@ def runSimulation(num_junctions,num_roads,road_angles,road_lengths,junc_pairs,nu
 
 if __name__ == "__main__":
     #Figure of eight
-    #num_junctions = 6
-    #num_roads = 7
-    #num_cars = 5
+    num_junctions = 6
+    num_roads = 7
+    num_cars = 5
 
-    #road_angles = [90,90,180,180,180,90,90]
-    #road_lengths = [50,30,15,15,15,30,50]
+    road_angles = [90,90,180,180,180,90,90]
+    road_lengths = [50,30,15,15,15,30,50]
 
-    #junc_pairs = [(0,1),(1,2),(3,2),(4,1),(5,0),(4,3),(5,4)]
+    junc_pairs = [(0,1),(1,2),(3,2),(4,1),(5,0),(4,3),(5,4)]
+
+    starts = None
 
     #3-road intersection
-    num_junctions = 5
-    num_roads = 4
-    num_cars = 3
+    #num_junctions = 5
+    #num_roads = 4
+    #num_cars = 3
 
-    road_angles = [0,0,90,90]
-    road_lengths = [40,40,40,40]
+    #road_angles = [0,0,90,90]
+    #road_lengths = [40,40,40,40]
 
-    junc_pairs = [(0,1),(1,2),(3,1),(1,4)]
-    starts = [[(0,1),1],[(1,4),0],[(0,1),1]]
+    #junc_pairs = [(0,1),(1,2),(3,1),(1,4)]
+    #starts = [[(0,1),1],[(1,4),0],[(0,1),1]]
     #dests = [[(0,1)]]
     #dests = [[(2,3),1],[(3,4),1]]
     dests = None

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import interaction_aware_vehicle_class as iavc
 import linear_controller_profiles as lcp
 import math
 import random
@@ -85,7 +86,7 @@ class DrivingController():
         ego_com = state["position"]
         other_com = state["other_position"]
 
-        state["del_d"] = distance(ego_com,other_com)
+        state["del_d"] = computeDistance(ego_com,other_com)
         state["del_v"] = state["other_v"] - state["velocity"]
 
         return state
@@ -163,6 +164,14 @@ class DrivingController():
     def copy(self,**kwargs):
         dup_init_params = self.paramCopy(**kwargs)
         return DrivingController(controller=self.controller_tag,**dup_init_params)
+
+
+    def endStep(self):
+        """Called (through the vehicle object) at the end of each timestep/iteration of the driving simulation.
+           Allows for compiling of information about how the scene has changed."""
+        #Currently this has no purpose here, but this is useful for the game theory controller, so included here to
+        # keep style consistency
+        pass
 
 
 class MultiDrivingController(DrivingController):
@@ -311,5 +320,5 @@ class ProactiveDrivingController(DelayedDrivingController):
         return ProactiveDrivingController(controller=self.controller_tag,**dup_init_params)
 
 
-def distance(pt1,pt2):
+def computeDistance(pt1,pt2):
     return math.sqrt((pt2[0]-pt1[0])**2 + (pt2[1]-pt1[1])**2)

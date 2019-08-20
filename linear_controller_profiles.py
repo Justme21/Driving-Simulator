@@ -525,7 +525,7 @@ class UnbiasedRandomController():
 
 
 class ManualController():
-    def __init__(self,accel_range=[-5,5],accel_jerk=.1,yaw_rate_range=[-30,30],yaw_rate_jerk=5,**kwargs):
+    def __init__(self,accel_range=[-5,5],accel_jerk=.5,yaw_rate_range=[-30,30],yaw_rate_jerk=.25,**kwargs):
         self.accel_range = accel_range
         self.accel_jerk = accel_jerk
         self.yaw_rate_range = yaw_rate_range

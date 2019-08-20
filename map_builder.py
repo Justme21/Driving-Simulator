@@ -112,12 +112,12 @@ def constructPhysicalOverlay(junctions):
     setAnchorPosit(anchor_junc,anchor_point)
 
 
-def buildMap(num_junctions,num_roads,road_angles,road_lens,junc_pairs):
+def buildMap(num_junctions,num_roads,road_angles,road_lens,junc_pairs,lane_width=None):
     """Runs the map builder. Constructs the junctions and roads and initiates the
        process of linking them together."""
-    junctions = [road_classes.Junction(i) for i in range(num_junctions)]
+    junctions = [road_classes.Junction(i,lane_width=lane_width) for i in range(num_junctions)]
 
-    roads = [road_classes.Road(road_lens[i],road_angles[i],i) for i in range(num_roads)]
+    roads = [road_classes.Road(road_lens[i],road_angles[i],i,lane_width=lane_width) for i in range(num_roads)]
 
     for i in range(num_roads):
         setJuncRoadJunc(junctions[junc_pairs[i][0]],roads[i],\
