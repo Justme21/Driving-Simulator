@@ -6,9 +6,6 @@ import pygame
 import random
 import sys
 
-sys.path.insert(0,"../responsibility_experiments")
-import risk_and_responsibility_tools as rnr
-
 class StandardDrivingController():
     def __init__(self,ego=None,accel_range=[-5,5],accel_jerk=1,yaw_rate_range=[0,0],yaw_rate_jerk=5,speed_limit=5,speed_limit_buffer=5,**kwargs):
         self.speed_limit = speed_limit
@@ -175,6 +172,9 @@ class FollowController():
     # Values used for experiments without basis in literature; speed_limit=22.22, damping=.275, stiff=.32
     #def __init__(self,time_headway=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],yaw_rate_range=[0,0],speed_limit=5,**kwargs):
     def __init__(self,time_headway=1.5,damping=95.8,stiff=15,timestep=.1,accel_jerk=10,r=-1,ego=None,other=None,accel_range=[-5,5],yaw_rate_range=[0,0],speed_limit=5,safe_dist_bounds=None,**kwargs):
+        import sys
+        sys.path.insert(0,"../responsibility_experiments")
+        import risk_and_responsibility_tools as rnr
         self.jerk = accel_jerk #Value of jerk does not affect acceleration chosen somehow
         self.speed_limit = speed_limit
         self.timestep = timestep
@@ -274,6 +274,47 @@ class FollowController():
         if lim_accel_range[1] is not None and lim_accel_range[1]<accel_range[1]: accel_range[1] = lim_accel_range[1]
 
         accel = min(accel_range[1],max(accel_range[0],accel))
+        return accel,0
+
+
+class IntelligentDrivingController():
+    def __init__(self,ego=None,other=None,speed_limit=33.33,headway=1.6,accel_exponent=4,s0=2,s1=0,accel_range=[-3,3],**kwargs):
+        self.speed_limit = speed_limit
+        self.accel_range = accel_range
+        self.headway = headway
+        self.accel_exponent = accel_exponent
+        self.s0 = s0 #+ ego.length/2
+        self.s1 = s1
+
+        self.leader = None
+        self.follower = None
+        if other is not None: self.setLeaderAndFollower(leader=other,follower=ego)
+
+
+    def setup(self,ego=None,other=None,**kwargs):
+        self.setLeaderAndFollower(leader=other,follower=ego,**kwargs)
+
+
+    def setLeaderAndFollower(self,leader,follower,**kwargs):
+        self.leader = leader
+        self.follower = follower
+
+
+    def selectAction(self,state,lim_accel_range,*args):
+        #Ensure acceleration is within the range of permitted accelerations
+        accel_range = self.accel_range
+        if lim_accel_range[0] is not None and lim_accel_range[0]>accel_range[0]: accel_range[0] = lim_accel_range[0]
+        if lim_accel_range[1] is not None and lim_accel_range[1]<accel_range[1]: accel_range[1] = lim_accel_range[1]
+
+        v = state["velocity"]
+        del_d = state["del_d"]
+        del_v = state["del_v"]
+        a_min = accel_range[0]
+        a_max = accel_range[1]
+        s_star = self.s0 + self.s1*(math.sqrt(v/self.speed_limit)) + self.headway*v + (v*del_v)/(2*math.sqrt(a_max*(-a_min)))
+
+        accel = a_max*(1-((v/self.speed_limit)**self.accel_exponent) - (s_star/del_d)**2)
+
         return accel,0
 
 

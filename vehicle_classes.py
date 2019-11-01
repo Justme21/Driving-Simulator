@@ -315,7 +315,8 @@ class Car():
         if vel is not None:
             self.v = vel
 
-        self.setFourCorners()
+        if posit is not None or heading is not None: self.setFourCorners()
+
         self.sense() #This is sense as the change in position might have caused a collision
 
 

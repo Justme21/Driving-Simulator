@@ -29,7 +29,7 @@ class DrivingController():
     def getController(self,controller,**kwargs):
         controller_list = {"standard":lcp.StandardDrivingController,"follow":lcp.FollowController,"generator":lcp.DataGeneratorController,\
                 "fast":lcp.GoFastController,"slow":lcp.GoSlowController,"overtake":lcp.OvertakeController,"trajectory":lcp.TrajectoryController\
-                ,"random":lcp.RandomController,"random-unbiased":lcp.UnbiasedRandomController,"manual":lcp.ManualController,"constant":lcp.ConstantVelocityController}
+                ,"random":lcp.RandomController,"random-unbiased":lcp.UnbiasedRandomController,"manual":lcp.ManualController,"constant":lcp.ConstantVelocityController,"idm":lcp.IntelligentDrivingController}
 
         return controller_list[controller](**kwargs)
 

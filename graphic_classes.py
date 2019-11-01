@@ -20,9 +20,12 @@ class GraphicWrapper(pygame.sprite.Sprite):
             if obj.is_ego:
                 self.image = pygame.image.load("/Users/JackGeary 1/Documents/College/University of Edinburgh/PhD Stuff/Programs/driving_simulator/car-blue.png")
                 #self.default_color = BLUE
-            else:
+            elif "grey" not in obj.label:
                 self.image = pygame.image.load("/Users/JackGeary 1/Documents/College/University of Edinburgh/PhD Stuff/Programs/driving_simulator/car-red.png")
                 #self.default_color = RED
+            else:
+                self.image = pygame.image.load("/Users/JackGeary 1/Documents/College/University of Edinburgh/PhD Stuff/Programs/driving_simulator/car-grey.png")
+
             self.image = pygame.transform.scale(self.image,(int(obj.length*unit),int(obj.width*unit)))
             centre_point = (self.obj.x_com,self.obj.y_com)
         else:

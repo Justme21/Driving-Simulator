@@ -82,6 +82,8 @@ class Simulator():
             print("Error: No Cars Loaded")
             exit(-1)
 
+        self.time = 0
+
         if self.debug:
             map_builder.printContents(self.junctions[0])
 
@@ -122,6 +124,8 @@ class Simulator():
             car.move()
         if self.graphic: self.g_sim.update()
         self.runSensing()
+        self.time += self.dt
+        #print("Time is {}".format(self.time))
 
 
     def runComplete(self,move_dict=None):
@@ -143,7 +147,7 @@ class Simulator():
                     i+=1
                 except IndexError: #messy way to break out of while loop when car can still move but out of entries in trajectory
                     break
-            self.time += self.dt
+            #self.time += self.dt
             self.endStep()
         self.setGraphic(False)
 
@@ -262,7 +266,9 @@ def canGo(cars):
     can_go = False
     for car in cars:
         if car.crashed or not car.on_road:
-            print("Simulator Message: Cars have crashed. Ending Simulation")
+            print("Simulator Message: Cars have crashed. Ending Simulation\n")
+            for car in cars:
+                print("Car: {}\tState: {}\t Crashed: {}\tOn Road: {}\n".format(car.label,car.state,car.crashed,car.on_road))
             return False #If a car has crashed the simulation should stop
         if not car.is_complete: can_go = True
     return can_go
