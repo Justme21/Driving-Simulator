@@ -328,7 +328,7 @@ if __name__ == "__main__":
     #Figure of eight
     num_junctions = 6
     num_roads = 7
-    num_cars = 5
+    num_cars = 1
 
     road_angles = [90,90,180,180,180,90,90]
     road_lengths = [50,30,15,15,15,30,50]
@@ -357,7 +357,6 @@ if __name__ == "__main__":
     draw_traj = False
     debug = False
 
-    num_episodes = 10000
     accel_range = [-3,3]
     yaw_rate_range = [-5,5]
     controllers = []

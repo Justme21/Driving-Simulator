@@ -18,7 +18,7 @@ class GraphicWrapper(pygame.sprite.Sprite):
         self.obj = obj
         if isinstance(obj,vehicle_classes.Car):
             if obj.is_ego:
-                self.image = pygame.image.load("/Users/JackGeary 1/Documents/College/University of Edinburgh/PhD Stuff/Programs/driving_simulator/car-blue.png")
+                self.image = pygame.image.load("../driving_simulator/car-blue.png")
                 #self.default_color = BLUE
             elif "grey" not in obj.label:
                 self.image = pygame.image.load("/Users/JackGeary 1/Documents/College/University of Edinburgh/PhD Stuff/Programs/driving_simulator/car-red.png")
