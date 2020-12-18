@@ -8,7 +8,8 @@ class DrivingController():
 
     def __init__(self,controller="standard",speed_limit=22.5,speed_limit_buffer=None,ego=None,other=None,timestep=.1,**kwargs):
         if speed_limit_buffer is None:
-            speed_limit_buffer = .1*speed_limit
+            #speed_limit_buffer = .1*speed_limit
+            speed_limit_buffer = 0
 
         #Parameters used to regerenerate/reinitialise the controller later
         self.controller_tag = controller
@@ -114,6 +115,9 @@ class DrivingController():
         if accel_range == [None,None]:
             accel_range = list(accel_range)
             accel_range = self.controller.accel_range
+
+        print("Next Vel: {}\t Speed Limit: {}".format(next_vel,self.speed_limit))
+
         if next_vel<0:
             accel = max(accel_range[0],min(accel_range[1],-self.ego.state["velocity"]/self.ego.timestep))
         elif next_vel>self.speed_limit:
@@ -134,7 +138,8 @@ class DrivingController():
         action = self.chooseAction(dict(state),accel_range,yaw_rate_range)
 
         (accel,yaw_rate) = action
-        self.log.append([state,accel])
+        #self.log.append([state,accel])
+        self.log.append([state,(accel,yaw_rate)]) #changed on 18/12/20. Might break something. 
         return accel,yaw_rate
 
 

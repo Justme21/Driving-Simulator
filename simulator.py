@@ -125,7 +125,7 @@ class Simulator():
         if self.graphic: self.g_sim.update()
         self.runSensing()
         self.time += self.dt
-        #print("Time is {}".format(self.time))
+        print("Time is {}".format(self.time))
 
 
     def runComplete(self,move_dict=None):
@@ -147,7 +147,6 @@ class Simulator():
                     i+=1
                 except IndexError: #messy way to break out of while loop when car can still move but out of entries in trajectory
                     break
-            #self.time += self.dt
             self.endStep()
         self.setGraphic(False)
 

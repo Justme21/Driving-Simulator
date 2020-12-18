@@ -3,6 +3,7 @@ import pygame
 
 from  datetime import datetime as dt
 import time
+import pyautogui #To size the screen
 
 WHITE = (255,255,255)
 GREEN = (0,255,0)
@@ -15,8 +16,9 @@ class GraphicSimulator():
         pygame.init()
 
         #The height and width of the screen pygame opens (in pixels)
-        height = 640
-        width = 1024
+        w,h = pyautogui.size() 
+        height = h-20
+        width = w-20
 
         #Define the unit value to ensure the graphic doesn't go off the screen
         #Unit defines the length of a metre in the simulation

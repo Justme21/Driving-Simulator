@@ -566,33 +566,37 @@ class UnbiasedRandomController():
 
 
 class ManualController():
-    def __init__(self,accel_range=[-5,5],accel_jerk=.5,yaw_rate_range=[-30,30],yaw_rate_jerk=.25,**kwargs):
+    def __init__(self,ego=None,accel_range=[-5,5],accel_jerk=1,yaw_rate_range=[-30,30],yaw_rate_jerk=5,**kwargs):
         self.accel_range = accel_range
         self.accel_jerk = accel_jerk
         self.yaw_rate_range = yaw_rate_range
         self.yaw_rate_jerk = yaw_rate_jerk
+
+        self.ego = ego
         print("Manual Controller Initialised")
 
 
-    def setup(self,**kwargs):
-        pass
+    def setup(self,ego=None,**kwargs):
+        if ego is not None:
+            self.ego = ego
 
 
     def selectAction(self,state,*args):
         accel,yaw_rate = state["acceleration"],state["yaw_rate"]
+        dt = self.ego.timestep
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:
             print("Left Key Pressed, increasing yaw_rate")
-            yaw_rate = min(self.yaw_rate_range[1],yaw_rate+self.yaw_rate_jerk)
+            yaw_rate = min(self.yaw_rate_range[1],yaw_rate+self.yaw_rate_jerk*dt)
         if keys[pygame.K_RIGHT]:
             print("Right Key Pressed, decreasing yaw_rate")
-            yaw_rate = max(self.yaw_rate_range[0],yaw_rate-self.yaw_rate_jerk)
+            yaw_rate = max(self.yaw_rate_range[0],yaw_rate-self.yaw_rate_jerk*dt)
         if keys[pygame.K_UP]:
             print("Up key pressed, increasing Acceleration")
-            accel = min(self.accel_range[1],accel+self.accel_jerk)
+            accel = min(self.accel_range[1],accel+self.accel_jerk*dt)
         if keys[pygame.K_DOWN]:
             print("Down Key pressed, decreasing Acceleration")
-            accel = max(self.accel_range[0],accel-self.accel_jerk)
+            accel = max(self.accel_range[0],accel-self.accel_jerk*dt)
 
         print("Action: Accel: {}\tYaw: {}".format(accel,yaw_rate))
         return accel,yaw_rate
