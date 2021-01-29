@@ -369,8 +369,13 @@ class Car():
         if init_heading is not None: head = init_heading
         else: head = self.heading
 
+        #Assuming actions immediately take effect
         v = vel + v_dot*dt
         heading = head + heading_dot*dt
+        
+        #Delayed repsonse (more common)
+        #v = vel
+        #heading = head
 
 
         x_dot = v*math.cos(math.radians(heading)+slip_angle)
@@ -475,13 +480,13 @@ class Car():
                     if self.debug:
                         print("IN: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(lane.label,\
                             self.heading,lane.direction,(lane.direction+180)%360))
-                    if math.fabs(((lane.direction+180)%360)-self.heading)<45:
+                    if math.fabs(((lane.direction+180)%360)-self.heading) or math.fabs(((lane.direction+180)%360)-self.heading)>315:
                         candidates.append(lane)
                 for lane in obj.out_lanes:
                     if self.debug:
                         print("OUT: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(lane.label,\
                                self.heading,(lane.direction+180)%360,lane.direction))
-                    if math.fabs(lane.direction-self.heading)<45:
+                    if math.fabs(lane.direction-self.heading)<45 or  math.fabs(lane.direction-self.heading)>315:
                         candidates.append(lane)
         return candidates
 
