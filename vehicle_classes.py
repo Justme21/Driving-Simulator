@@ -486,7 +486,7 @@ class Car():
                     if self.debug:
                         print("IN: {}\t HEADING {}\tLANE DIRECTION {} ({})".format(lane.label,\
                             self.heading,lane.direction,(lane.direction+180)%360))
-                    if math.fabs(((lane.direction+180)%360)-self.heading) or math.fabs(((lane.direction+180)%360)-self.heading)>315:
+                    if math.fabs(((lane.direction+180)%360)-self.heading)<45 or math.fabs(((lane.direction+180)%360)-self.heading)>315:
                         candidates.append(lane)
                 for lane in obj.out_lanes:
                     if self.debug:
