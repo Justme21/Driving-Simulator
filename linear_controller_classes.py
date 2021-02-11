@@ -105,6 +105,13 @@ class DrivingController():
     def chooseAction(self,state,accel_range,yaw_rate_range):
         accel,yaw_rate = self.controller.selectAction(state,accel_range,yaw_rate_range)
 
+        if accel_range == [None,None]:
+            accel_range = list(accel_range)
+            accel_range = self.controller.accel_range
+
+        if accel>accel_range[1]: accel = accel_range[1]
+        elif accel<accel_range[0]: accel = accel_range[0]
+
         #HACKY: This needs to be removed. Inserted to facilitate first year review results
         try:
             next_vel = self.ego.state["velocity"] + self.ego.timestep*accel
@@ -112,16 +119,13 @@ class DrivingController():
             print("LINEAR_CONTROLLER_CLASSES ERROR: State: {}\tTimestep: {}\tAccel: {}\tYaw_Rate: {}".format(self.ego.state,self.ego.timestep,accel,yaw_rate))
             print("Controller is: {}: ({})".format(type(self),type(self.controller)))
             exit(-1)
-        if accel_range == [None,None]:
-            accel_range = list(accel_range)
-            accel_range = self.controller.accel_range
 
         print("Next Vel: {}\t Speed Limit: {}".format(next_vel,self.speed_limit))
 
         if next_vel<0:
-            accel = max(accel_range[0],min(accel_range[1],-self.ego.state["velocity"]/self.ego.timestep))
+            accel = -self.ego.state["velocity"]/self.ego.timestep
         elif next_vel>self.speed_limit:
-            accel = min(accel_range[1],max(accel_range[0],(self.speed_limit-self.ego.state["velocity"])/self.ego.timestep))
+            accel = (self.speed_limit-self.ego.state["velocity"])/self.ego.timestep
 
         if accel>accel_range[1] or accel<accel_range[0]:
             #This can't happen now, but this has left open the problem that self.ego.state["velocity"] sometimes dips below 0, even though

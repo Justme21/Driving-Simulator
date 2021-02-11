@@ -13,6 +13,7 @@ CAR_WIDTH = 2.097
 
 class Car():
     def __init__(self,controller=None,is_ego=False,label="DEFAULT_LABEL",debug=False,is_demo=True,is_interactive=True,timestep=.1,car_params={}):
+        ########################### State Variables ###########################################
         #x and y of the centre of mass (COM) of the car.
         # For simplicity we assume the COM is the centre of the car
         self.x_com = None
@@ -34,6 +35,7 @@ class Car():
         #The label of the junction that the car is to drive to
         self.is_ego = is_ego
 
+        ########################## Dynamics Attributes #######################################
         #Dimensions of the car
         if "length" in car_params and car_params["length"]>0: self.length = car_params["length"]
         else: self.length = CAR_LENGTH
@@ -50,23 +52,15 @@ class Car():
         else:
             self.Lr = 1.61 #Distance from COM to rear axle
             self.Lf = 1.11 #Distance from COM to front axle
-        #The remaining two parameters are included in the referenced paper, but are we do not use
-        #These would be used in the Dynamic Bicycle model
-        #self.L0 = 4 #Distance from front of car to rear axle
-        #self.n = 16.25 #Steering ratio
-        #self.Kf = .009 #Normalised front cornering compliance
-        #self.Kr = .006 #Normalised read cornering compliance
-        #tda = .05 #time delay used for accelerating/braking manoeuvres
-        #tdd = .03 #time delay used for turning manoeuvres
 
+        #The processing speed of the car (how often it changes it's action)
+        self.timestep = timestep #unit is seconds
+
+        ####################33 Relating Car to Map ####################### 
         #The object (road or junction) that the car is on
         #This is a list as the car might be straddling a lane and junction
         #Or two lanes
         self.on = []
-
-        #The processing speed of the car (how often it changes it's action)
-        self.timestep = timestep #unit is seconds
-        self.debug = debug
 
         #Sense Variables
         self.on_road = True #Check if car still on road
@@ -77,8 +71,7 @@ class Car():
         self.is_interactive = is_interactive #if car is not interactive then it cannot crash into other vehicles or be crashed into
                                              # this is useful if you want to duplicate a car to generate data but don't want the original car to crash into duplicate 
 
-        self.label = "C{}".format(label)
-
+        ####################### Trajectory Stuff #######################
         #Trajectory and Waypoint
         self.destination = None #Road object that is what the car is (theoretically) going towards
         self.traj_posit = None #Index giving position along the trajectory
@@ -90,12 +83,21 @@ class Car():
         self.pub_state = None
         self.priv_state = None
 
+        ############# Controllers Stuff ################################
         self.controller = controller
         if self.controller is not None: self.controller.setup(ego=self)
         #Keeps track of permissible controllers for a vehicle
         self.controllers = {"default": controller}
+
+        #Triggers; keys of dictionary is a binary function. At the end of each round of simulation (in endStep)
+        # If the key returns true then the corresponding function is executed.
+        self.triggers = {}
+
+        ############# Final Touches ###################################
         #Initialise time. Used to record how long it takes to achieve an objective
         self.time = 0
+        self.debug = debug
+        self.label = "C{}".format(label) #Car Label
         self.initialisation_params = {}
 
 
@@ -320,6 +322,10 @@ class Car():
         self.sense() #This is sense as the change in position might have caused a collision
 
 
+    def addControllers(self,controller_dict):
+        self.controllers.update(controller_dict)
+
+
     def setController(self,tag=None,controller=None):
         if controller is not None:
             if controller not in [self.controllers[x] for x in self.controllers]:
@@ -340,8 +346,8 @@ class Car():
             exit(-1)
 
 
-    def addControllers(self,controller_dict):
-        self.controllers.update(controller_dict)
+    def addTriggers(self,trigger_dict):
+        self.triggers.update(trigger_dict)
 
 
     def simulateDynamics(self,lin_accel,yaw_rate,init_vel=None,init_heading=None,dt=None):
@@ -751,8 +757,14 @@ class Car():
     def endStep(self):
         """Called at the end of each timestep/iteration of the simulator. Allows for compiling
            of information about what happened during the iteration"""
+        #Recording vehicle information to controller log
         if self.controller is not None:
             self.controller.endStep()
+
+        #Trigger key is binary function dependent on the state.
+        #If the triggr is true, the consequent is executed
+        for trigger in self.triggers.keys():
+            if trigger(): self.triggers[trigger]()
 
 
     def printStatus(self,mod=""):

@@ -278,13 +278,12 @@ class FollowController():
 
 
 class IntelligentDrivingController():
-    def __init__(self,ego=None,other=None,speed_limit=33.33,headway=1.6,accel_exponent=4,s0=2,s1=0,accel_range=[-3,3],**kwargs):
+    def __init__(self,ego=None,other=None,speed_limit=33.33,headway=1.6,accel_exponent=4,s0=2,accel_range=[-3,3],**kwargs):
         self.speed_limit = speed_limit
         self.accel_range = accel_range
         self.headway = headway
         self.accel_exponent = accel_exponent
-        self.s0 = s0 #+ ego.length/2
-        self.s1 = s1
+        self.s0 = s0 
 
         self.leader = None
         self.follower = None
@@ -306,12 +305,18 @@ class IntelligentDrivingController():
         if lim_accel_range[0] is not None and lim_accel_range[0]>accel_range[0]: accel_range[0] = lim_accel_range[0]
         if lim_accel_range[1] is not None and lim_accel_range[1]<accel_range[1]: accel_range[1] = lim_accel_range[1]
 
+        #Presumes left to right orientation
+        ego_pos = state["position"] #presumed follower
+        other_pos = state["other_position"] #presumed leader
+        del_d = state["other_position"][0]-state["position"][0]
+
         v = state["velocity"]
-        del_d = state["del_d"]
         del_v = state["del_v"]
+        #del_d = state["dell_d"] #This is euclidean  distance, which is orientation agnostic, but also not suitable here
+        del_d -= self.follower.length
         a_min = accel_range[0]
         a_max = accel_range[1]
-        s_star = self.s0 + self.s1*(math.sqrt(v/self.speed_limit)) + self.headway*v + (v*del_v)/(2*math.sqrt(a_max*(-a_min)))
+        s_star = self.s0 + self.headway*v + (v*del_v)/(2*math.sqrt(a_max*abs(a_min)))
 
         accel = a_max*(1-((v/self.speed_limit)**self.accel_exponent) - (s_star/del_d)**2)
 
@@ -587,16 +592,20 @@ class ManualController():
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:
             print("Left Key Pressed, increasing yaw_rate")
-            yaw_rate = min(self.yaw_rate_range[1],yaw_rate+self.yaw_rate_jerk*dt)
+            if yaw_rate<0: yaw_rate = 0
+            else: yaw_rate = min(self.yaw_rate_range[1],yaw_rate+self.yaw_rate_jerk*dt)
         if keys[pygame.K_RIGHT]:
             print("Right Key Pressed, decreasing yaw_rate")
-            yaw_rate = max(self.yaw_rate_range[0],yaw_rate-self.yaw_rate_jerk*dt)
+            if yaw_rate>0: yaw_rate = 0
+            else: yaw_rate = max(self.yaw_rate_range[0],yaw_rate-self.yaw_rate_jerk*dt)
         if keys[pygame.K_UP]:
             print("Up key pressed, increasing Acceleration")
-            accel = min(self.accel_range[1],accel+self.accel_jerk*dt)
+            if accel<0: accel = 0 #tweak to control to make it more intuitive to control
+            else: accel = min(self.accel_range[1],accel+self.accel_jerk*dt)
         if keys[pygame.K_DOWN]:
             print("Down Key pressed, decreasing Acceleration")
-            accel = max(self.accel_range[0],accel-self.accel_jerk*dt)
+            if accel>0: accel = 0 #Tweak to control to make it more intuitive to control
+            else: accel = max(self.accel_range[0],accel-self.accel_jerk*dt)
 
         print("Action: Accel: {}\tYaw: {}".format(accel,yaw_rate))
         return accel,yaw_rate
