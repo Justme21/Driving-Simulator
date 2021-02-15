@@ -278,12 +278,13 @@ class FollowController():
 
 
 class IntelligentDrivingController():
-    def __init__(self,ego=None,other=None,speed_limit=33.33,headway=1.6,accel_exponent=4,s0=2,accel_range=[-3,3],**kwargs):
-        self.speed_limit = speed_limit
+    def __init__(self,ego=None,other=None,speed_limit=33.33,headway=1.6,accel_exponent=4,s0=2,b=None,accel_range=[-3,3],**kwargs):
+        self.speed_limit = speed_limit #Also desired velocity
         self.accel_range = accel_range
-        self.headway = headway
-        self.accel_exponent = accel_exponent
-        self.s0 = s0 
+        self.headway = headway #How much time you want there to be between cars
+        self.accel_exponent = accel_exponent #exponent of the velocity term (v/v0)
+        self.s0 = s0 #minimum distance you want there to be between vehicles
+        self.b = b #Comfortable deceleration rate
 
         self.leader = None
         self.follower = None
@@ -314,9 +315,14 @@ class IntelligentDrivingController():
         del_v = state["del_v"]
         #del_d = state["dell_d"] #This is euclidean  distance, which is orientation agnostic, but also not suitable here
         del_d -= self.follower.length
-        a_min = accel_range[0]
+        if self.b is None: b = accel_range[0]
+        else: b = self.b
         a_max = accel_range[1]
-        s_star = self.s0 + self.headway*v + (v*del_v)/(2*math.sqrt(a_max*abs(a_min)))
+        #If there's no leader then this controller just drives to speed limit
+        if self.leader is None:
+            s_star = 0
+        else:
+            s_star = self.s0 + self.headway*v + (v*del_v)/(2*math.sqrt(a_max*abs(b)))
 
         accel = a_max*(1-((v/self.speed_limit)**self.accel_exponent) - (s_star/del_d)**2)
 
@@ -590,24 +596,27 @@ class ManualController():
         accel,yaw_rate = state["acceleration"],state["yaw_rate"]
         dt = self.ego.timestep
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            print("Left Key Pressed, increasing yaw_rate")
-            if yaw_rate<0: yaw_rate = 0
-            else: yaw_rate = min(self.yaw_rate_range[1],yaw_rate+self.yaw_rate_jerk*dt)
-        if keys[pygame.K_RIGHT]:
-            print("Right Key Pressed, decreasing yaw_rate")
-            if yaw_rate>0: yaw_rate = 0
-            else: yaw_rate = max(self.yaw_rate_range[0],yaw_rate-self.yaw_rate_jerk*dt)
-        if keys[pygame.K_UP]:
-            print("Up key pressed, increasing Acceleration")
-            if accel<0: accel = 0 #tweak to control to make it more intuitive to control
-            else: accel = min(self.accel_range[1],accel+self.accel_jerk*dt)
-        if keys[pygame.K_DOWN]:
-            print("Down Key pressed, decreasing Acceleration")
-            if accel>0: accel = 0 #Tweak to control to make it more intuitive to control
-            else: accel = max(self.accel_range[0],accel-self.accel_jerk*dt)
 
-        print("Action: Accel: {}\tYaw: {}".format(accel,yaw_rate))
+        #Negate an action if the corresponding key is not still being pressed
+        if (not keys[pygame.K_LEFT]) and yaw_rate>0: yaw_rate = 0
+        if (not keys[pygame.K_RIGHT]) and yaw_rate<0: yaw_rate = 0
+        if (not keys[pygame.K_UP]) and accel>0: accel = 0
+        if (not keys[pygame.K_DOWN]) and accel<0: accel = 0
+
+        if keys[pygame.K_LEFT]:
+            #print("Left Key Pressed, increasing yaw_rate")
+            yaw_rate = min(self.yaw_rate_range[1],yaw_rate+self.yaw_rate_jerk*dt)
+        if keys[pygame.K_RIGHT]:
+            #print("Right Key Pressed, decreasing yaw_rate")
+            yaw_rate = max(self.yaw_rate_range[0],yaw_rate-self.yaw_rate_jerk*dt)
+        if keys[pygame.K_UP]:
+            #print("Up key pressed, increasing Acceleration")
+            accel = min(self.accel_range[1],accel+self.accel_jerk*dt)
+        if keys[pygame.K_DOWN]:
+            #print("Down Key pressed, decreasing Acceleration")
+            accel = max(self.accel_range[0],accel-self.accel_jerk*dt)
+
+        #print("Action: Accel: {}\tYaw: {}".format(accel,yaw_rate))
         return accel,yaw_rate
 
 
