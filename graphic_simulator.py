@@ -2,7 +2,7 @@ from graphic_classes import GraphicWrapper
 import pygame
 
 from  datetime import datetime as dt
-import os
+import os #To position screen
 import time
 import pyautogui #To size the screen
 
