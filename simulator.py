@@ -127,7 +127,7 @@ class Simulator():
         if self.graphic: self.g_sim.update()
         self.runSensing()
         self.time += self.dt
-        print("Time is {}".format(self.time))
+        if self.debug: print("Time is {}".format(self.time))
 
 
     def runComplete(self,move_dict=None):
@@ -167,6 +167,11 @@ class Simulator():
                 car.printStatus()
                 print("\n")
 
+
+    def reinitialise(self):
+        """Resets all vehicles back to initial positions and states"""
+        for car in self.cars:
+            self.car.reinitialise()
 
     def wrapUp(self):
         """Shuts down the graphical part of the simulator if it has been initialised"""

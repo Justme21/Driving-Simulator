@@ -120,7 +120,7 @@ class DrivingController():
             print("Controller is: {}: ({})".format(type(self),type(self.controller)))
             exit(-1)
 
-        print("Next Vel: {}\t Speed Limit: {}".format(next_vel,self.speed_limit))
+        #print("Next Vel: {}\t Speed Limit: {}".format(next_vel,self.speed_limit))
 
         if next_vel<0:
             accel = -self.ego.state["velocity"]/self.ego.timestep
