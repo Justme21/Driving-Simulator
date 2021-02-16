@@ -168,11 +168,6 @@ class Simulator():
                 print("\n")
 
 
-    def reinitialise(self):
-        """Resets all vehicles back to initial positions and states"""
-        for car in self.cars:
-            self.car.reinitialise()
-
     def wrapUp(self):
         """Shuts down the graphical part of the simulator if it has been initialised"""
         if self.graphic:
