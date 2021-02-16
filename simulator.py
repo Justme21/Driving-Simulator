@@ -99,6 +99,8 @@ class Simulator():
         for car in self.cars:
             car.sense()
 
+        if self.graphic: self.drawSimulation()
+
 
     def setGraphic(self,graphic):
         """Changes the value of self.graphics after simulator has been initialised. If simulator was not graphical and graphics are enabled
