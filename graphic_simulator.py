@@ -31,6 +31,12 @@ class GraphicSimulator():
         #Setting the position of the top right of the window when it is intitialised
         os.environ['SDL_VIDEO_WINDOW_POS'] = "{},{}".format(window_position[0],window_position[1])
 
+        #Position of the window in the screen when pygame opens
+        if window_position is None:
+            window_position = [(screen_w-width)/2,(screen_h-height)/2]
+        #Setting the position of the top right of the window when it is intitialised
+        os.environ['SDL_VIDEO_WINDOW_POS'] = "{},{}".format(window_position[0],window_position[1])
+
         #Define the unit value to ensure the graphic doesn't go off the screen
         #Unit defines the length of a metre in the simulation
         self.unit = setUnitVal(junctions,height,width)
