@@ -2,6 +2,7 @@ from graphic_classes import GraphicWrapper
 import pygame
 
 from  datetime import datetime as dt
+import os
 import time
 import pyautogui #To size the screen
 
@@ -11,14 +12,24 @@ GREEN = (0,255,0)
 INVIS = (255,0,255)
 
 class GraphicSimulator():
-    def __init__(self,dt,junctions,roads,cars,draw_traj):
+    def __init__(self,dt,junctions,roads,cars,draw_traj,window_position=None,window_dimensions=None):
         #Initialise the pygame instance
         pygame.init()
 
         #The height and width of the screen pygame opens (in pixels)
-        w,h = pyautogui.size() 
+        screen_w,screen_h = pyautogui.size()
+        if window_dimensions == None:
+            w,h = screen_w,screen_h
+        else:
+            w,h = window_dimensions
         height = h-20
         width = w-20
+
+        #Position of the window in the screen when pygame opens
+        if window_position is None:
+            window_position = [(screen_w-width)/2,(screen_h-height)/2]
+        #Setting the position of the top right of the window when it is intitialised
+        os.environ['SDL_VIDEO_WINDOW_POS'] = "{},{}".format(window_position[0],window_position[1])
 
         #Define the unit value to ensure the graphic doesn't go off the screen
         #Unit defines the length of a metre in the simulation
