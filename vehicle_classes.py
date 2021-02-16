@@ -274,7 +274,9 @@ class Car():
         params = self.initialisation_params
         self.time = 0
         self.initSetup(**params)
-        self.controller.reset()
+        for controller in self.controllers.items():
+            controller.reset()
+        self.controller = self.controllers["default"]
 
 
     def composeState(self):
