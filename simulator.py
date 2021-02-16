@@ -152,7 +152,7 @@ class Simulator():
                 except IndexError: #messy way to break out of while loop when car can still move but out of entries in trajectory
                     break
             self.endStep()
-        self.setGraphic(False)
+        #self.setGraphic(False) #for repeated experiments, want graphics to stay live
 
 
     def endStep(self):
