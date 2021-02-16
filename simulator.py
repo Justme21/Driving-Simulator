@@ -13,7 +13,7 @@ import math
 MAX_RUNTIME = 1000
 
 class Simulator():
-    def __init__(self,run_graphics=False,draw_traj=False,runtime=None,debug=False,dt=.1):
+    def __init__(self,run_graphics=False,draw_traj=False,runtime=None,debug=False,dt=.1,graphic_position=None,graphic_dimensions=None):
         """run_graphics: [bool] indicates if graphical simulation is being run
            draw_traj: [bool] indicates that trajectories for vehicles should be drawn
            runtime: [float/None] the expected runtime of the simulation. If None then runs until terminated
@@ -32,6 +32,8 @@ class Simulator():
         self.graphic = run_graphics #Boolean, whether or not graphics are generated during simulation
         self.traj = run_graphics and draw_traj #Won't try draw trajectory if not graphic
         self.g_sim = None #If graphics are being used g_sim will be initalised as the graphical component
+        self.graphic_position = graphic_position #Position of the top left corner of the graphic window
+        self.graphic_dimensions = graphic_dimensions #The width,height of the graphical screen to be drawn
 
         self.debug = debug #Debug prints debug text littered throughout the code
         self.dt = dt #size of a timestep in the simulator
@@ -53,7 +55,7 @@ class Simulator():
     def drawSimulation(self):
         """If graphics are being used then initialises the graphical simulator and draws the current scene"""
         if self.g_sim is None:
-            self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj)
+            self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj,self.graphic_position,self.graphic_dimensions)
         self.g_sim.pauseSimulation()
 
 
@@ -74,7 +76,7 @@ class Simulator():
                                                     lane_width,junc_pairs,self.cars,init_speeds,starts,dests)
 
             if self.graphic:
-                self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj)
+                self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj,self.graphic_position,self.graphic_dimensions)
             self.runSensing() #Sensing happens at the end of each timestep, so initial round of sensing must occur
             if self.debug:
                 print("Initialisation Complete")
@@ -104,7 +106,7 @@ class Simulator():
         if self.graphic != graphic:
             self.graphic = graphic
             if self.graphic:
-                self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj)
+                self.g_sim = graphic_simulator.GraphicSimulator(self.dt,self.junctions,self.roads,self.cars,self.traj,self.graphic_position,self.graphic_dimensions)
 
 
     def singleStep(self,car_list = None,move_dict=None,index=None):
