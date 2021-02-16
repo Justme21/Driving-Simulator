@@ -230,7 +230,8 @@ class Car():
         else:
             y_disp = prev_disp_y
 
-        disp = angularToCartesianDisplacement(x_disp,y_disp,heading)
+        #disp = angularToCartesianDisplacement(x_disp,y_disp,heading)
+        disp = angularToCartesianDisplacement(x_disp,y_disp,lane.direction)
 
         lane_coords = lane.four_corners["front_left"]
         lane_x = lane_coords[0]
