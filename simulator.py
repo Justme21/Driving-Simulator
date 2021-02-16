@@ -96,8 +96,7 @@ class Simulator():
             car.reinitialise()
 
         #Re-sense after every car has moved to it's new location
-        for car in self.cars:
-            car.sense()
+        self.runSensing()
 
         if self.graphic: self.drawSimulation()
 
