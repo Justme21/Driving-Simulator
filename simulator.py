@@ -127,7 +127,7 @@ class Simulator():
         if self.graphic: self.g_sim.update()
         self.runSensing()
         self.time += self.dt
-        print("Time is {}".format(self.time))
+        if self.debug: print("Time is {}".format(self.time))
 
 
     def runComplete(self,move_dict=None):
