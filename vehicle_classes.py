@@ -274,7 +274,7 @@ class Car():
         params = self.initialisation_params
         self.time = 0
         self.initSetup(**params)
-        for controller in self.controllers.items():
+        for controller in self.controllers.values():
             controller.reset()
         self.controller = self.controllers["default"]
 
