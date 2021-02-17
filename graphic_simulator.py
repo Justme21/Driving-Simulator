@@ -53,6 +53,10 @@ class GraphicSimulator():
         #The clock controlling the runs of the simulation to ensure they run smooth
         self.clock = pygame.time.Clock()
 
+        #Triggers; keys of dictionary is a binary function. At the end of each round of simulation (in endStep)
+        # If the key returns true then the corresponding function is executed.
+        self.triggers = {}
+
 
     def initialiseBackground(self,width,height):
         """Sets up the background and the screen that the simulator will be drawn on.
@@ -149,8 +153,14 @@ class GraphicSimulator():
 
 
     def endStep(self):
+        #Trigger key is binary function dependent on the state.
+        #If the triggr is true, the consequent is executed
+        for trigger in self.triggers.keys():
+            if trigger(): self.triggers[trigger]()
+
         self.checkForPause()
         self.checkForSnapshot()
+
         pygame.display.flip() #flip screen after all changes made
 
 

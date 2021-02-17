@@ -35,6 +35,10 @@ class Simulator():
         self.graphic_position = graphic_position #Position of the top left corner of the graphic window
         self.graphic_dimensions = graphic_dimensions #The width,height of the graphical screen to be drawn
 
+        #Triggers; keys of dictionary is a binary function. At the end of each round of simulation (in endStep)
+        # If the key returns true then the corresponding function is executed.
+        self.triggers = {}
+
         self.debug = debug #Debug prints debug text littered throughout the code
         self.dt = dt #size of a timestep in the simulator
 
@@ -160,7 +164,12 @@ class Simulator():
         if self.graphic:
             self.g_sim.update()
 
-        #Cars do anything to change their own state (might also change things in graphic simulator... clumsily)
+        #Trigger key is binary function dependent on the state.
+        #If the triggr is true, the consequent is executed
+        for trigger in self.triggers.keys():
+            if trigger(): self.triggers[trigger]()
+
+        #Cars do anything to change their own state
         for car in self.cars:
             car.endStep()
 
