@@ -161,8 +161,8 @@ class Simulator():
     def endStep(self):
         """Prints debug output at end of each timestep, mainly for debugging purposes"""
         #Wipe screen and update to depict new state
-        if self.graphic:
-            self.g_sim.update()
+        #if self.graphic:
+        #    self.g_sim.update()
 
         #Trigger key is binary function dependent on the state.
         #If the triggr is true, the consequent is executed
@@ -175,6 +175,7 @@ class Simulator():
 
         #Update the graphical screen
         if self.graphic:
+            self.g_sim.update()
             self.g_sim.endStep()
 
         if self.debug:
