@@ -192,6 +192,12 @@ class Simulator():
                 print("\n")
 
 
+    def endSimulation(self):
+        """Terminate the simulation."""
+        #Simulation will end if all cars have completed their objectives
+        for car in cars: car.is_complete = True
+
+
     def wrapUp(self):
         """Shuts down the graphical part of the simulator if it has been initialised"""
         if self.graphic:
