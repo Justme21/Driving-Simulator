@@ -16,7 +16,10 @@ class DrivingController():
         self.initialisation_params = {'ego':ego,'other':other,'speed_limit':speed_limit,'speed_limit_buffer':speed_limit_buffer,'timestep':timestep}
         self.initialisation_params.update(kwargs)
 
-        self.controller = self.getController(controller,**self.initialisation_params)
+        if controller != "NA":
+            self.controller = self.getController(controller,**self.initialisation_params)
+        else:
+            self.controller = None
         self.ego = None
         self.other = None
         self.setup(ego=ego,other=other)
@@ -28,6 +31,7 @@ class DrivingController():
 
 
     def getController(self,controller,**kwargs):
+        #Can also use tag "NA" to specify controller manually
         controller_list = {"standard":lcp.StandardDrivingController,"follow":lcp.FollowController,"generator":lcp.DataGeneratorController,\
                 "fast":lcp.GoFastController,"slow":lcp.GoSlowController,"overtake":lcp.OvertakeController,"trajectory":lcp.TrajectoryController\
                 ,"random":lcp.RandomController,"random-unbiased":lcp.UnbiasedRandomController,"manual":lcp.ManualController,"constant":lcp.ConstantVelocityController,"idm":lcp.IntelligentDrivingController}
@@ -148,7 +152,9 @@ class DrivingController():
 
 
     def reset(self):
-        self.controller = self.getController(self.controller_tag,**self.initialisation_params)
+        self.clearLog()
+        if self.controller_tag != "NA":
+            self.controller = self.getController(self.controller_tag,**self.initialisation_params)
 
 
     def getLog(self):
