@@ -195,7 +195,7 @@ class Simulator():
     def endSimulation(self):
         """Terminate the simulation."""
         #Simulation will end if all cars have completed their objectives
-        for car in cars: car.is_complete = True
+        for car in self.cars: car.is_complete = True
 
 
     def wrapUp(self):
