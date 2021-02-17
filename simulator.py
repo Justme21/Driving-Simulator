@@ -103,7 +103,10 @@ class Simulator():
         #Re-sense after every car has moved to it's new location
         self.runSensing()
 
-        if self.graphic: self.drawSimulation()
+        if self.graphic: 
+            self.g_sim.update()
+            self.g_sim.endStep()
+            self.g_sim.pauseSimulation()
 
 
     def setGraphic(self,graphic):
