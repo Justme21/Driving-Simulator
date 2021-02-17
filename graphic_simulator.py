@@ -96,7 +96,6 @@ class GraphicSimulator():
                     drawTrajectory(traj_coords,self.unit,self.screen)
 
             self.clock.tick(self.max_fps)
-            pygame.display.flip()
 
 
     def drawToScreen(self,obj_list):
@@ -158,6 +157,7 @@ class GraphicSimulator():
     def endStep(self):
         self.checkForPause()
         self.checkForSnapshot()
+        pygame.display.flip() #flip screen after all changes made
 
 
 def drawTrajectory(coords,unit,screen):
