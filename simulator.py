@@ -158,6 +158,10 @@ class Simulator():
         #self.setGraphic(False) #for repeated experiments, want graphics to stay live
 
 
+    def addTriggers(self,trigger_dict):
+        self.triggers.update(trigger_dict)
+
+
     def endStep(self):
         """Prints debug output at end of each timestep, mainly for debugging purposes"""
         #Wipe screen and update to depict new state
