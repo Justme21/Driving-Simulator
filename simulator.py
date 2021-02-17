@@ -92,6 +92,7 @@ class Simulator():
 
     def reinitialise(self):
         """Resets all the moving objects on the map back to their initial settings"""
+        self.time = 0
         for car in self.cars:
             car.reinitialise()
 
@@ -125,7 +126,6 @@ class Simulator():
                 else:
                     car.setAction(0,0)
             car.move()
-        if self.graphic: self.g_sim.update()
         self.runSensing()
         self.time += self.dt
         if self.debug: print("Time is {}".format(self.time))
@@ -156,9 +156,15 @@ class Simulator():
 
     def endStep(self):
         """Prints debug output at end of each timestep, mainly for debugging purposes"""
+        #Wipe screen and update to depict new state
+        if self.graphic:
+            self.g_sim.update()
+
+        #Cars do anything to change their own state (might also change things in graphic simulator... clumsily)
         for car in self.cars:
             car.endStep()
 
+        #Update the graphical screen
         if self.graphic:
             self.g_sim.endStep()
 
