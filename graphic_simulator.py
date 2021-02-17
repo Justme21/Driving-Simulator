@@ -158,6 +158,10 @@ class GraphicSimulator():
             print("GS: Snapshot {} of simulator has been taken".format(snapshot_name))
 
 
+    def addTriggers(self,trigger_dict):
+        self.triggers.update(trigger_dict)
+
+
     def endStep(self):
         #Trigger key is binary function dependent on the state.
         #If the triggr is true, the consequent is executed
