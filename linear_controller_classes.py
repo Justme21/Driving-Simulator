@@ -48,7 +48,8 @@ class DrivingController():
             self.initialisation_params['other'] = other
 
         if ego is not None:
-            self.controller.setup(ego=ego,other=other,**kwargs)
+            if self.controller_tag != "NA":
+                self.controller.setup(ego=ego,other=other,**kwargs)
             self.initialisation_params.update(kwargs)
 
 
