@@ -12,6 +12,8 @@ DARK_BLUE = (0,0,128)
 
 DOWN_SCALE = .98
 
+PROGRAM_DIR = os.path.abspath(os.path.dirname(__file__))
+
 class GraphicWrapper(pygame.sprite.Sprite):
     def __init__(self,obj,unit=1):
         super().__init__()
@@ -19,16 +21,18 @@ class GraphicWrapper(pygame.sprite.Sprite):
         self.obj = obj
         if isinstance(obj,vehicle_classes.Car):
             if obj.is_ego:
-                self.image = pygame.image.load("{}/car-purple.png".format(os.path.abspath(os.path.dirname("car-purple.png"))))
-                #self.image = pygame.image.load("{}/car-blue.png".format(os.path.abspath(os.path.dirname("car-blue.png")))) #What about the colourblind people?
+                import pdb
+                pdb.set_trace()
+                self.image = pygame.image.load("{}/car-purple.png".format(PROGRAM_DIR))
+                #self.image = pygame.image.load("{}/car-blue.png".format(PROGRAM_DIR)) #What about the colourblind people?
                 #self.default_color = BLUE
             elif "grey" not in obj.label:
-                self.image = pygame.image.load("{}/car-orange.png".format(os.path.abspath(os.path.dirname("car-orange.png"))))
-                #self.image = pygame.image.load("{}/car-red.png".format(os.path.abspath(os.path.dirname("car-red.png")))) #What about the colourblind people?
+                self.image = pygame.image.load("{}/car-orange.png".format(PROGRAM_DIR))
+                #self.image = pygame.image.load("{}/car-red.png".format(PROGRAM_DIR)) #What about the colourblind people?
                 #self.default_color = RED
             else:
-                self.image = pygame.image.load("{}/firetruck.png".format(os.path.abspath(os.path.dirname("firetruck.png"))))
-                #self.image = pygame.image.load("{}/car-grey.png".format(os.path.abspath(os.path.dirname("car-grey.png")))) #Edit for altruism paper
+                self.image = pygame.image.load("{}/firetruck.png".format(PROGRAM_DIR))
+                #self.image = pygame.image.load("{}/car-grey.png".format(PROGRAM_DIR)) #Edit for altruism paper
 
             self.image = pygame.transform.scale(self.image,(int(obj.length*unit),int(obj.width*unit)))
             centre_point = (self.obj.x_com,self.obj.y_com)
