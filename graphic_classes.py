@@ -21,8 +21,6 @@ class GraphicWrapper(pygame.sprite.Sprite):
         self.obj = obj
         if isinstance(obj,vehicle_classes.Car):
             if obj.is_ego:
-                import pdb
-                pdb.set_trace()
                 self.image = pygame.image.load("{}/car-purple.png".format(PROGRAM_DIR))
                 #self.image = pygame.image.load("{}/car-blue.png".format(PROGRAM_DIR)) #What about the colourblind people?
                 #self.default_color = BLUE
