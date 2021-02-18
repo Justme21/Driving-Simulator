@@ -17,7 +17,7 @@ class GraphicSimulator():
         pygame.init()
 
         #The height and width of the screen pygame opens (in pixels)
-        screen_w,screen_h = pyautogui.size()
+        screen_w,screen_h = (1024, 768)#pyautogui.size()
         if window_dimensions == None:
             w,h = screen_w,screen_h
         else:
