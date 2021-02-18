@@ -11,7 +11,8 @@ DARK_BLUE = (0,0,128)
 
 DOWN_SCALE = .98
 
-PROGRAMS_DIR = "/Users/JackGeary 1/Documents/College/University of Edinburgh/Phd Stuff/Programs"
+import os
+PROGRAMS_DIR = os.path.abspath(os.path.dirname(__file__))
 
 class GraphicWrapper(pygame.sprite.Sprite):
     def __init__(self,obj,unit=1):
@@ -20,15 +21,15 @@ class GraphicWrapper(pygame.sprite.Sprite):
         self.obj = obj
         if isinstance(obj,vehicle_classes.Car):
             if obj.is_ego:
-                self.image = pygame.image.load("{}/driving_simulator/car-purple.png".format(PROGRAMS_DIR))
+                self.image = pygame.image.load("{}/car-purple.png".format(PROGRAMS_DIR))
                 #self.image = pygame.image.load("{}/driving_simulator/car-blue.png") #What about the colourblind people?
                 #self.default_color = BLUE
             elif "grey" not in obj.label:
-                self.image = pygame.image.load("{}/driving_simulator/car-orange.png".format(PROGRAMS_DIR))
+                self.image = pygame.image.load("{}/car-orange.png".format(PROGRAMS_DIR))
                 #self.image = pygame.image.load("{}/driving_simulator/car-red.png") #What about the colourblind people?
                 #self.default_color = RED
             else:
-                self.image = pygame.image.load("{}/driving_simulator/firetruck.png".format(PROGRAMS_DIR))
+                self.image = pygame.image.load("{}/firetruck.png".format(PROGRAMS_DIR))
                 #self.image = pygame.image.load("{}/driving_simulator/car-grey.png") #Edit for altruism paper
 
             self.image = pygame.transform.scale(self.image,(int(obj.length*unit),int(obj.width*unit)))
