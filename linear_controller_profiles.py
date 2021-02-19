@@ -584,7 +584,7 @@ class ManualController():
         self.yaw_rate_jerk = yaw_rate_jerk
 
         self.ego = ego
-        print("Manual Controller Initialised")
+        #print("Manual Controller Initialised")
 
 
     def setup(self,ego=None,**kwargs):
